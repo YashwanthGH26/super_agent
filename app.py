@@ -165,8 +165,6 @@ def get_current_datetime() -> str:
     utc = datetime.datetime.utcnow()
     return (
         f"Current local datetime: {now.strftime('%A, %B %d, %Y at %H:%M:%S')}\n"
-        f"UTC datetime: {utc.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
-        f"CST datetime: {utc.strftime('%Y-%m-%d %H:%M:%S CST')}\n"
         f"IST datetime: {utc.strftime('%Y-%m-%d %H:%M:%S IST')}\n"
         f"Week number: {now.isocalendar()[1]}\n"
         f"Day of year: {now.timetuple().tm_yday}"
@@ -338,15 +336,15 @@ with st.sidebar:
 
 # ─── 8. Always-On Voice HUD ────────────────────────────────────────────────────
 # Fully hands-free like Siri/Alexa:
-#   • Continuous background listening for wake word "hey jarvis"
-#   • On detection → chime → command listening with noise suppression
-#   • Auto-submit on silence → agent replies → TTS speaks back
-#   • Returns to wake-word listening automatically
+    • Continuous background listening for wake word "hey jarvis"
+    • On detection → chime → command listening with noise suppression
+    • Auto-submit on silence → agent replies → TTS speaks back
+    • Returns to wake-word listening automatically
 #
 # Noise suppression via:
-#   • Web Audio API noise gate (filters mic input below threshold)
-#   • SpeechRecognition with no-speech timeout handling
-#   • Debounced final-result detection (ignores sub-word fragments)
+    • Web Audio API noise gate (filters mic input below threshold)
+    • SpeechRecognition with no-speech timeout handling
+    • Debounced final-result detection (ignores sub-word fragments)
 
 voice_html = """
 <div id="jarvis-voice" style="
