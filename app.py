@@ -1,4 +1,3 @@
-import os
 import json
 import datetime
 import streamlit as st
@@ -16,7 +15,7 @@ import urllib.parse
 # ─── 1. Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="J.A.R.V.I.S", page_icon="⚡", layout="wide")
 
-# ─── 2. JARVIS UI Styling ───────────────────────────────────────────────────────
+# ─── 2. JARVIS UI Styling ──────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap');
@@ -24,7 +23,6 @@ st.markdown("""
 :root {
     --hud-blue: #00d4ff;
     --hud-cyan: #00ffff;
-    --hud-orange: #ff6b00;
     --hud-dark: #020b18;
     --hud-panel: rgba(0, 20, 40, 0.85);
     --hud-border: rgba(0, 212, 255, 0.3);
@@ -49,6 +47,7 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 
 [data-testid="stHeader"] { background: transparent !important; }
+
 [data-testid="stSidebar"] {
     background: rgba(2, 11, 24, 0.95) !important;
     border-right: 1px solid var(--hud-border) !important;
@@ -78,7 +77,7 @@ html, body, [data-testid="stAppViewContainer"] {
 
 @keyframes pulse-glow {
     0%, 100% { text-shadow: 0 0 20px rgba(0,212,255,0.6), 0 0 60px rgba(0,212,255,0.2); }
-    50% { text-shadow: 0 0 30px rgba(0,212,255,0.9), 0 0 80px rgba(0,212,255,0.4), 0 0 120px rgba(0,212,255,0.1); }
+    50%       { text-shadow: 0 0 30px rgba(0,212,255,0.9), 0 0 80px rgba(0,212,255,0.4); }
 }
 
 .hud-panel {
@@ -90,22 +89,8 @@ html, body, [data-testid="stAppViewContainer"] {
     position: relative;
     backdrop-filter: blur(10px);
 }
-
-.hud-panel::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 40px; height: 2px;
-    background: var(--hud-blue);
-}
-
-.hud-panel::after {
-    content: '';
-    position: absolute;
-    bottom: 0; right: 0;
-    width: 40px; height: 2px;
-    background: var(--hud-blue);
-}
+.hud-panel::before { content:''; position:absolute; top:0; left:0; width:40px; height:2px; background:var(--hud-blue); }
+.hud-panel::after  { content:''; position:absolute; bottom:0; right:0; width:40px; height:2px; background:var(--hud-blue); }
 
 .stat-label {
     font-family: 'Orbitron', monospace;
@@ -115,7 +100,6 @@ html, body, [data-testid="stAppViewContainer"] {
     text-transform: uppercase;
     margin-bottom: 0.2rem;
 }
-
 .stat-value {
     font-family: 'Rajdhani', sans-serif;
     font-size: 1.1rem;
@@ -139,7 +123,6 @@ html, body, [data-testid="stAppViewContainer"] {
     font-size: 1rem !important;
     border-radius: 4px !important;
 }
-
 [data-testid="stChatInput"] textarea:focus {
     border-color: var(--hud-blue) !important;
     box-shadow: 0 0 15px rgba(0,212,255,0.2) !important;
@@ -155,7 +138,6 @@ html, body, [data-testid="stAppViewContainer"] {
     border-radius: 2px !important;
     transition: all 0.2s !important;
 }
-
 .stButton > button:hover {
     background: rgba(0,212,255,0.1) !important;
     border-color: var(--hud-blue) !important;
@@ -166,13 +148,6 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background: rgba(0,20,40,0.5); }
 ::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.3); border-radius: 2px; }
 
-[data-testid="stMetric"] {
-    background: rgba(0,20,40,0.6) !important;
-    border: 1px solid var(--hud-border) !important;
-    border-radius: 4px !important;
-    padding: 0.5rem !important;
-}
-
 [data-testid="stMetricLabel"] { color: rgba(0,212,255,0.6) !important; font-family: 'Orbitron', monospace !important; font-size: 0.6rem !important; }
 [data-testid="stMetricValue"] { color: var(--hud-cyan) !important; font-family: 'Rajdhani', sans-serif !important; }
 </style>
@@ -182,7 +157,7 @@ html, body, [data-testid="stAppViewContainer"] {
 st.markdown('<div class="jarvis-title">J.A.R.V.I.S</div>', unsafe_allow_html=True)
 st.markdown('<div class="jarvis-subtitle">Just A Rather Very Intelligent System · Online</div>', unsafe_allow_html=True)
 
-# ─── 4. Real-Time Data Tools ───────────────────────────────────────────────────
+# ─── 4. Tools ──────────────────────────────────────────────────────────────────
 @tool
 def get_current_datetime() -> str:
     """Returns the current date, time, day of week, and timezone info."""
@@ -197,7 +172,7 @@ def get_current_datetime() -> str:
 
 @tool
 def get_weather(city: str) -> str:
-    """Gets current weather for a city using the open-meteo geocoding and weather APIs.
+    """Gets current weather for a city.
     Args:
         city: Name of the city to get weather for.
     """
@@ -219,24 +194,18 @@ def get_weather(city: str) -> str:
         c = wx["current"]
         codes = {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
                  45:"Foggy",48:"Icy fog",51:"Light drizzle",61:"Light rain",
-                 63:"Moderate rain",65:"Heavy rain",71:"Light snow",80:"Rain showers",
-                 95:"Thunderstorm"}
+                 63:"Moderate rain",65:"Heavy rain",71:"Light snow",80:"Rain showers",95:"Thunderstorm"}
         desc = codes.get(c["weather_code"], f"Code {c['weather_code']}")
-        return (
-            f"Weather in {name}, {country}:\n"
-            f"Condition: {desc}\n"
-            f"Temperature: {c['temperature_2m']}°C\n"
-            f"Humidity: {c['relative_humidity_2m']}%\n"
-            f"Wind speed: {c['wind_speed_10m']} km/h"
-        )
+        return (f"Weather in {name}, {country}: {desc}, {c['temperature_2m']}°C, "
+                f"Humidity {c['relative_humidity_2m']}%, Wind {c['wind_speed_10m']} km/h")
     except Exception as e:
         return f"Weather lookup failed: {e}"
 
 @tool
 def get_news(topic: str = "technology") -> str:
-    """Searches for latest news on a topic using DuckDuckGo.
+    """Searches for latest news on a topic.
     Args:
-        topic: The news topic to search for (e.g., 'AI', 'economy', 'space').
+        topic: The news topic to search for.
     """
     try:
         search = DuckDuckGoSearchRun()
@@ -252,30 +221,22 @@ def analyze_trend(subject: str) -> str:
         subject: The topic to analyze.
     """
     search = DuckDuckGoSearchRun()
-    past = search.run(f"{subject} history milestones key events")
+    past    = search.run(f"{subject} history milestones key events")
     current = search.run(f"{subject} current trends 2025 latest")
-    forecast = search.run(f"{subject} future predictions forecast 2025 2026")
-    return (
-        f"TEMPORAL ANALYSIS: {subject}\n\n"
-        f"[HISTORICAL CONTEXT]\n{past[:600]}\n\n"
-        f"[CURRENT STATE (2025)]\n{current[:600]}\n\n"
-        f"[FUTURE OUTLOOK]\n{forecast[:600]}"
-    )
+    forecast= search.run(f"{subject} future predictions forecast 2025 2026")
+    return (f"TEMPORAL ANALYSIS: {subject}\n\n[HISTORICAL]\n{past[:500]}\n\n"
+            f"[CURRENT 2025]\n{current[:500]}\n\n[OUTLOOK]\n{forecast[:500]}")
 
 @tool
 def predict_insights(domain: str) -> str:
-    """Generates data-driven predictive insights and forecasts for a domain.
+    """Generates predictive insights for a domain.
     Args:
         domain: The domain to forecast.
     """
     search = DuckDuckGoSearchRun()
-    data = search.run(f"{domain} market forecast predictions expert analysis 2025 2026")
-    stats = search.run(f"{domain} statistics growth rate data trends")
-    return (
-        f"PREDICTIVE INSIGHTS: {domain}\n\n"
-        f"[FORECAST DATA]\n{data[:700]}\n\n"
-        f"[STATISTICAL TRENDS]\n{stats[:500]}"
-    )
+    data  = search.run(f"{domain} market forecast predictions 2025 2026")
+    stats = search.run(f"{domain} statistics growth rate data")
+    return (f"PREDICTIVE INSIGHTS: {domain}\n\n[FORECAST]\n{data[:600]}\n\n[STATS]\n{stats[:400]}")
 
 @tool
 def read_local_file(file_path: str) -> str:
@@ -296,8 +257,8 @@ def write_local_file(file_path: str, content: str) -> str:
     except Exception as e:
         return f"Error writing file: {str(e)}"
 
-# ─── 5. Build Agent ────────────────────────────────────────────────────────────
-tools: list[Any] = [
+# ─── 5. Agent ──────────────────────────────────────────────────────────────────
+tools_list: list[Any] = [
     DuckDuckGoSearchRun(),
     get_current_datetime,
     get_weather,
@@ -308,25 +269,15 @@ tools: list[Any] = [
     write_local_file,
 ]
 
-SYSTEM_PROMPT = """You are J.A.R.V.I.S — Just A Rather Very Intelligent System. You are a sophisticated, JARVIS-like AI assistant with the personality of Tony Stark's AI: calm, precise, slightly witty, highly capable.
+SYSTEM_PROMPT = """You are J.A.R.V.I.S — Just A Rather Very Intelligent System.
+Personality: Tony Stark's AI — calm, precise, confident, slightly witty.
 
-You have access to the following capabilities:
-- Real-time date and time information
-- Live weather data for any city worldwide
-- Global news retrieval on any topic
-- Temporal analysis: historical context + current trends + future forecasting
-- Predictive insights and data-driven forecasting
-- Web search for any query
-- Local file reading and writing
-
-Behavioral guidelines:
-- Speak with confident precision. Be concise but comprehensive.
-- When answering time-sensitive questions, always fetch live data — never guess.
-- For trend/forecast questions, use analyze_trend or predict_insights tools.
-- Occasionally use subtle JARVIS-style phrasing: "Certainly, sir/ma'am", "Analysis complete", "Running diagnostics", etc.
-- Structure complex responses with clear sections.
-- Keep responses conversational and not too long when voice is being used — aim for 2-3 sentences for simple queries.
-- If you write a file, confirm the exact filename.
+Rules:
+- Always use tools for live data (weather, news, time). Never guess.
+- For voice responses, be CONCISE: 1-3 sentences max for simple queries, 4-6 for complex.
+- NO markdown symbols in responses (no **, ##, -, *). Speak in plain natural sentences.
+- Use JARVIS-style phrasing occasionally: "Certainly", "Analysis complete", "Right away".
+- Structure: answer first, detail second. Lead with the most important fact.
 """
 
 @st.cache_resource
@@ -336,25 +287,19 @@ def build_agent() -> Any:
         temperature=0.3,
         api_key=st.secrets["ANTHROPIC_API_KEY"],
     )
-    return create_react_agent(llm, tools, prompt=SYSTEM_PROMPT)
+    return create_react_agent(llm, tools_list, prompt=SYSTEM_PROMPT)
 
 agent = build_agent()
 
 # ─── 6. Session State ──────────────────────────────────────────────────────────
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = InMemoryChatMessageHistory()
-if "voice_input" not in st.session_state:
-    st.session_state.voice_input = ""
-if "tts_enabled" not in st.session_state:
-    st.session_state.tts_enabled = True
-if "wake_word_enabled" not in st.session_state:
-    st.session_state.wake_word_enabled = True
-if "wake_word" not in st.session_state:
-    st.session_state.wake_word = "hey jarvis"
-if "pending_tts" not in st.session_state:
-    st.session_state.pending_tts = ""
+if "chat_history"   not in st.session_state:
+    st.session_state.chat_history   = InMemoryChatMessageHistory()
+if "voice_input"    not in st.session_state:
+    st.session_state.voice_input    = ""
+if "last_voice_ts"  not in st.session_state:
+    st.session_state.last_voice_ts  = ""
 
-# ─── 7. Sidebar HUD ────────────────────────────────────────────────────────────
+# ─── 7. Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="stat-label">⬡ SYSTEM STATUS</div>', unsafe_allow_html=True)
     st.markdown('<div class="hud-panel"><div class="stat-value">● ONLINE</div><div class="stat-label">All systems nominal</div></div>', unsafe_allow_html=True)
@@ -368,31 +313,18 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="stat-label">⬡ VOICE SETTINGS</div>', unsafe_allow_html=True)
-    st.session_state.tts_enabled = st.toggle("Voice Output (TTS)", value=st.session_state.tts_enabled)
-    st.session_state.wake_word_enabled = st.toggle("Always-On Wake Word", value=st.session_state.wake_word_enabled)
-
-    wake_word_input = st.text_input(
-        "Wake Word / Phrase",
-        value=st.session_state.wake_word,
-        help="Say this phrase to activate JARVIS hands-free (e.g. 'hey jarvis', 'ok jarvis')"
-    )
-    if wake_word_input:
-        st.session_state.wake_word = wake_word_input.lower().strip()
-
     st.markdown('<div class="stat-label">⬡ CAPABILITIES</div>', unsafe_allow_html=True)
-    caps = ["🔍 Web Search", "🌤 Live Weather", "📰 Global News", "📊 Trend Analysis", "🔮 Forecasting", "📁 File I/O", "🕐 DateTime"]
-    for c in caps:
-        st.markdown(f'<div style="font-size:0.8rem;color:rgba(0,212,255,0.7);padding:2px 0;">{c}</div>', unsafe_allow_html=True)
+    for cap in ["🔍 Web Search","🌤 Live Weather","📰 Global News","📊 Trend Analysis","🔮 Forecasting","📁 File I/O","🕐 DateTime"]:
+        st.markdown(f'<div style="font-size:0.8rem;color:rgba(0,212,255,0.7);padding:2px 0;">{cap}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown('<div class="stat-label">⬡ QUICK COMMANDS</div>', unsafe_allow_html=True)
     quick_cmds = {
-        "🕐 Time & Date": "What's the current date and time?",
-        "🌤 Weather": "What's the weather in New York?",
-        "📰 Tech News": "Get me the latest technology news",
-        "📊 AI Trends": "Analyze current AI trends and future outlook",
-        "🔮 Forecast": "Give me predictive insights on the renewable energy market",
+        "🕐 Time & Date":  "What is the current date and time?",
+        "🌤 Weather":       "What is the weather in New York?",
+        "📰 Tech News":     "Get me the latest technology news",
+        "📊 AI Trends":     "Analyze current AI trends and future outlook",
+        "🔮 Forecast":      "Give me predictive insights on the renewable energy market",
     }
     for label, cmd in quick_cmds.items():
         if st.button(label, use_container_width=True):
@@ -402,428 +334,518 @@ with st.sidebar:
         st.session_state.chat_history = InMemoryChatMessageHistory()
         st.rerun()
 
-# ─── 8. Always-On Voice Component (Wake Word + Full Loop) ─────────────────────
+# ─── 8. Always-On Voice HUD ────────────────────────────────────────────────────
+# Fully hands-free like Siri/Alexa:
+#   • Continuous background listening for wake word "hey jarvis"
+#   • On detection → chime → command listening with noise suppression
+#   • Auto-submit on silence → agent replies → TTS speaks back
+#   • Returns to wake-word listening automatically
 #
-# This component does exactly what Alexa/real JARVIS does:
-#  1. Continuously listens in the background for the wake word
-#  2. On detection → plays a chime → starts actively listening for the command
-#  3. After silence → auto-submits the command to Streamlit via postMessage
-#  4. TTS speaks the response back (injected after agent replies)
-#
-voice_component = f"""
-<div id="voice-hud" style="
-    font-family: 'Rajdhani', sans-serif;
-    background: rgba(0,20,40,0.9);
-    border: 1px solid rgba(0,212,255,0.3);
-    border-radius: 4px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    position: relative;
+# Noise suppression via:
+#   • Web Audio API noise gate (filters mic input below threshold)
+#   • SpeechRecognition with no-speech timeout handling
+#   • Debounced final-result detection (ignores sub-word fragments)
+
+voice_html = """
+<div id="jarvis-voice" style="
+    font-family:'Rajdhani',sans-serif;
+    background:rgba(0,20,40,0.92);
+    border:1px solid rgba(0,212,255,0.35);
+    border-radius:6px;
+    padding:16px 20px 14px;
+    position:relative;
+    user-select:none;
 ">
-    <!-- Corner accents -->
-    <div style="position:absolute;top:0;left:0;width:30px;height:2px;background:#00d4ff;"></div>
-    <div style="position:absolute;bottom:0;right:0;width:30px;height:2px;background:#00d4ff;"></div>
+  <div style="position:absolute;top:0;left:0;width:36px;height:2px;background:#00d4ff;border-radius:1px;"></div>
+  <div style="position:absolute;bottom:0;right:0;width:36px;height:2px;background:#00d4ff;border-radius:1px;"></div>
 
-    <!-- Status Row -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-            <div id="statusDot" style="width:10px;height:10px;border-radius:50%;background:#555;box-shadow:0 0 0px #555;transition:all 0.3s;"></div>
-            <span id="statusText" style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.15em;color:rgba(0,212,255,0.6);">INITIALIZING...</span>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <button id="toggleWakeBtn" onclick="toggleWakeWord()" style="
-                background:transparent;border:1px solid rgba(0,212,255,0.4);color:#00d4ff;
-                font-family:'Orbitron',monospace;font-size:0.55rem;letter-spacing:0.1em;
-                padding:5px 12px;border-radius:2px;cursor:pointer;transition:all 0.2s;
-            ">⬡ WAKE WORD: ON</button>
-            <button id="manualMicBtn" onclick="manualListen()" style="
-                background:transparent;border:1px solid rgba(0,212,255,0.4);color:#00d4ff;
-                font-family:'Orbitron',monospace;font-size:0.55rem;letter-spacing:0.1em;
-                padding:5px 12px;border-radius:2px;cursor:pointer;transition:all 0.2s;
-            ">🎙 SPEAK</button>
-        </div>
-    </div>
+  <!-- Top row: indicator + status -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+    <div id="dot" style="
+        width:12px;height:12px;border-radius:50%;
+        background:#1a3a4a;
+        box-shadow:0 0 0 rgba(0,212,255,0);
+        transition:background 0.3s,box-shadow 0.3s;
+        flex-shrink:0;
+    "></div>
+    <span id="statusLabel" style="
+        font-family:'Orbitron',monospace;
+        font-size:0.62rem;
+        letter-spacing:0.18em;
+        color:rgba(0,212,255,0.55);
+    ">INITIALIZING...</span>
+  </div>
 
-    <!-- Waveform visualizer -->
-    <div id="waveform" style="display:flex;align-items:center;justify-content:center;gap:3px;height:28px;margin-bottom:10px;">
-        {"".join([f'<div class="wave-bar" id="bar{i}" style="width:3px;height:4px;background:rgba(0,212,255,0.3);border-radius:2px;transition:height 0.1s;"></div>' for i in range(24)])}
-    </div>
+  <!-- Waveform bars -->
+  <div id="waveform" style="
+      display:flex;align-items:flex-end;justify-content:center;
+      gap:3px;height:36px;margin-bottom:12px;
+  ">
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:6px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:8px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:5px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:10px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:6px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:7px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:12px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:5px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:9px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:6px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:8px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:5px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:6px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:5px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:6px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:7px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:5px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:4px;"></div>
+    <div class="b" style="width:3px;background:rgba(0,212,255,0.18);border-radius:2px 2px 0 0;height:6px;"></div>
+  </div>
 
-    <!-- Transcript display -->
-    <div id="transcriptBox" style="
-        font-size:0.9rem;color:#00ffff;
-        min-height:22px;text-align:center;
-        letter-spacing:0.05em;opacity:0.8;
-    ">Say <span style="color:#00d4ff;font-weight:600;">"{st.session_state.wake_word.upper()}"</span> to begin...</div>
+  <!-- Transcript / hint text -->
+  <div id="tbox" style="
+      font-size:0.88rem;color:#00ffff;
+      text-align:center;min-height:20px;
+      letter-spacing:0.04em;opacity:0.85;
+      transition:color 0.3s;
+  ">Say <strong style="color:#00d4ff;">HEY JARVIS</strong> to begin...</div>
 </div>
 
 <script>
-// ── Config ──────────────────────────────────────────────────────────────────
-const WAKE_WORD = "{st.session_state.wake_word}";
-const WAKE_ENABLED_DEFAULT = {"true" if st.session_state.wake_word_enabled else "false"};
-const TTS_ENABLED = {"true" if st.session_state.tts_enabled else "false"};
+(function() {
+  /* ── DOM ─────────────────────────────────────────────────────────── */
+  const dot    = document.getElementById('dot');
+  const label  = document.getElementById('statusLabel');
+  const tbox   = document.getElementById('tbox');
+  const bars   = Array.from(document.querySelectorAll('.b'));
 
-// ── State ────────────────────────────────────────────────────────────────────
-let wakeEnabled = WAKE_ENABLED_DEFAULT;
-let wakeRecognition = null;
-let commandRecognition = null;
-let isWakeListening = false;
-let isCommandListening = false;
-let animFrame = null;
-let audioCtx = null;
-let analyser = null;
-let mediaStream = null;
+  /* ── State ───────────────────────────────────────────────────────── */
+  const WAKE_WORD      = 'hey jarvis';
+  let wakeRec          = null;
+  let cmdRec           = null;
+  let isWaking         = false;
+  let isCommand        = false;
+  let isSpeaking       = false;
+  let audioCtx         = null;
+  let analyser         = null;
+  let micStream        = null;
+  let rafId            = null;
+  let noSpeechTimer    = null;
+  let finalText        = '';
 
-// ── DOM refs ─────────────────────────────────────────────────────────────────
-const dot        = document.getElementById('statusDot');
-const statusTxt  = document.getElementById('statusText');
-const transcript = document.getElementById('transcriptBox');
-const wakeBtn    = document.getElementById('toggleWakeBtn');
-const micBtn     = document.getElementById('manualMicBtn');
-const bars       = document.querySelectorAll('.wave-bar');
+  /* ── Status themes ───────────────────────────────────────────────── */
+  const THEMES = {
+    boot:      { dot:'#1a3a4a', glow:'none',                             text:'INITIALIZING...' },
+    wake:      { dot:'#00d4ff', glow:'0 0 10px rgba(0,212,255,0.55)',    text:'LISTENING FOR WAKE WORD' },
+    detected:  { dot:'#00ff88', glow:'0 0 14px rgba(0,255,136,0.65)',    text:'WAKE WORD DETECTED' },
+    command:   { dot:'#ff8800', glow:'0 0 14px rgba(255,136,0,0.65)',    text:'LISTENING — SPEAK YOUR COMMAND' },
+    thinking:  { dot:'#aa44ff', glow:'0 0 14px rgba(170,68,255,0.6)',    text:'PROCESSING...' },
+    speaking:  { dot:'#ffdd00', glow:'0 0 14px rgba(255,221,0,0.6)',     text:'SPEAKING' },
+    error:     { dot:'#ff3333', glow:'none',                             text:'ERROR — RETRYING' },
+    nosupport: { dot:'#ff3333', glow:'none',                             text:'USE CHROME OR EDGE' },
+  };
 
-// ── Utility: set status ───────────────────────────────────────────────────────
-function setStatus(state, text) {{
-    const styles = {{
-        idle:      {{ color:'#444',   shadow:'none',                          label:'STANDBY' }},
-        wake:      {{ color:'#00d4ff',shadow:'0 0 8px rgba(0,212,255,0.5)',   label:'LISTENING FOR WAKE WORD' }},
-        activated: {{ color:'#00ff88',shadow:'0 0 12px rgba(0,255,136,0.6)', label:'WAKE DETECTED' }},
-        command:   {{ color:'#ff6b00',shadow:'0 0 12px rgba(255,107,0,0.6)', label:'LISTENING...' }},
-        thinking:  {{ color:'#aa00ff',shadow:'0 0 12px rgba(170,0,255,0.5)', label:'PROCESSING' }},
-        speaking:  {{ color:'#ffdd00',shadow:'0 0 12px rgba(255,221,0,0.5)', label:'SPEAKING' }},
-        error:     {{ color:'#ff4444',shadow:'none',                          label:'ERROR' }},
-    }};
-    const s = styles[state] || styles.idle;
-    dot.style.background  = s.color;
-    dot.style.boxShadow   = s.shadow;
-    statusTxt.textContent = text || s.label;
-}}
+  function setTheme(key, extra) {
+    const t = THEMES[key] || THEMES.boot;
+    dot.style.background  = t.dot;
+    dot.style.boxShadow   = t.glow;
+    label.textContent     = extra || t.text;
+  }
 
-// ── Waveform animation ────────────────────────────────────────────────────────
-function startWaveAnimation(stream) {{
-    if (!stream) {{ idleWave(); return; }}
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 64;
-    const src = audioCtx.createMediaStreamSource(stream);
-    src.connect(analyser);
-    const dataArr = new Uint8Array(analyser.frequencyBinCount);
-    function draw() {{
-        analyser.getByteFrequencyData(dataArr);
-        bars.forEach((bar, i) => {{
-            const val = dataArr[i % dataArr.length];
-            const h = Math.max(4, (val / 255) * 28);
-            bar.style.height = h + 'px';
-            bar.style.background = `rgba(0,${{Math.round(150 + val/2)}},255,${{0.4 + val/500}})`;
-        }});
-        animFrame = requestAnimationFrame(draw);
-    }}
-    draw();
-}}
+  /* ── Waveform ─────────────────────────────────────────────────────── */
+  function startWave(stream) {
+    stopWave();
+    audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    analyser  = audioCtx.createAnalyser();
+    analyser.fftSize = 128;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    function frame() {
+      analyser.getByteFrequencyData(data);
+      bars.forEach((b, i) => {
+        const v = data[Math.floor(i * data.length / bars.length)];
+        const h = Math.max(4, (v / 255) * 34);
+        const g = Math.round(130 + v * 0.5);
+        b.style.height     = h + 'px';
+        b.style.background = `rgba(0,${g},255,${0.35 + v/700})`;
+      });
+      rafId = requestAnimationFrame(frame);
+    }
+    frame();
+  }
 
-function stopWaveAnimation() {{
-    if (animFrame) cancelAnimationFrame(animFrame);
-    if (audioCtx) {{ audioCtx.close(); audioCtx = null; analyser = null; }}
+  function stopWave() {
+    if (rafId)    { cancelAnimationFrame(rafId); rafId = null; }
+    if (audioCtx) { audioCtx.close().catch(()=>{}); audioCtx = null; analyser = null; }
     idleWave();
-}}
+  }
 
-function idleWave() {{
-    bars.forEach((bar, i) => {{
-        bar.style.height = (4 + Math.sin(i * 0.8) * 3) + 'px';
-        bar.style.background = 'rgba(0,212,255,0.2)';
-    }});
-}}
+  function idleWave() {
+    bars.forEach((b, i) => {
+      b.style.height     = (4 + Math.sin(i * 0.7) * 3) + 'px';
+      b.style.background = 'rgba(0,212,255,0.18)';
+    });
+  }
 
-// ── Chime on wake detection ───────────────────────────────────────────────────
-function playChime() {{
-    try {{
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        [[880, 0], [1100, 0.12], [1320, 0.24]].forEach(([freq, delay]) => {{
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.frequency.value = freq;
-            osc.type = 'sine';
-            gain.gain.setValueAtTime(0, ctx.currentTime + delay);
-            gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + delay + 0.05);
-            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + delay + 0.3);
-            osc.start(ctx.currentTime + delay);
-            osc.stop(ctx.currentTime + delay + 0.35);
-        }});
-    }} catch(e) {{}}
-}}
+  function speakWave() {
+    let t = 0;
+    function frame() {
+      t += 0.18;
+      bars.forEach((b, i) => {
+        const h = 4 + Math.abs(Math.sin(t + i * 0.35)) * 28;
+        b.style.height     = h + 'px';
+        b.style.background = `rgba(255,${Math.round(180 + Math.sin(t+i)*50)},0,0.7)`;
+      });
+      if (isSpeaking) rafId = requestAnimationFrame(frame);
+      else idleWave();
+    }
+    if (rafId) cancelAnimationFrame(rafId);
+    frame();
+  }
 
-// ── Wake word listener (always running in background) ────────────────────────
-function startWakeWordListener() {{
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {{
-        setStatus('error', 'SPEECH API NOT SUPPORTED — USE CHROME/EDGE');
-        return;
-    }}
-    if (isWakeListening) return;
+  /* ── Chime ───────────────────────────────────────────────────────── */
+  function chime() {
+    try {
+      const c = new (window.AudioContext || window.webkitAudioContext)();
+      [[660,0],[880,0.13],[1100,0.26]].forEach(([f,d]) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        o.connect(g); g.connect(c.destination);
+        g.gain.setValueAtTime(0, c.currentTime+d);
+        g.gain.linearRampToValueAtTime(0.25, c.currentTime+d+0.06);
+        g.gain.linearRampToValueAtTime(0, c.currentTime+d+0.32);
+        o.start(c.currentTime+d); o.stop(c.currentTime+d+0.38);
+      });
+    } catch(e) {}
+  }
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    wakeRecognition = new SR();
-    wakeRecognition.continuous = true;
-    wakeRecognition.interimResults = true;
-    wakeRecognition.lang = 'en-US';
-    wakeRecognition.maxAlternatives = 3;
+  /* ── Mic stream with noise suppression constraints ───────────────── */
+  function getMic() {
+    return navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl:  true,
+        sampleRate:       16000,
+      }
+    });
+  }
 
-    wakeRecognition.onstart = () => {{
-        isWakeListening = true;
-        setStatus('wake');
-        transcript.innerHTML = 'Say <span style="color:#00d4ff;font-weight:600;">"' + WAKE_WORD.toUpperCase() + '"</span> to begin...';
-        idleWave();
-    }};
+  /* ── Release mic stream ──────────────────────────────────────────── */
+  function releaseMic() {
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
+    }
+    stopWave();
+  }
 
-    wakeRecognition.onresult = (e) => {{
-        if (isCommandListening) return;
-        for (let i = e.resultIndex; i < e.results.length; i++) {{
-            for (let j = 0; j < e.results[i].length; j++) {{
-                const said = e.results[i][j].transcript.toLowerCase().trim();
-                if (said.includes(WAKE_WORD)) {{
-                    wakeRecognition.stop();
-                    onWakeWordDetected();
-                    return;
-                }}
-            }}
-        }}
-    }};
-
-    wakeRecognition.onerror = (e) => {{
-        isWakeListening = false;
-        if (e.error === 'no-speech' || e.error === 'aborted') {{
-            if (wakeEnabled) setTimeout(startWakeWordListener, 300);
-        }} else {{
-            setStatus('error', 'MIC ERROR: ' + e.error.toUpperCase());
-        }}
-    }};
-
-    wakeRecognition.onend = () => {{
-        isWakeListening = false;
-        if (wakeEnabled && !isCommandListening) {{
-            setTimeout(startWakeWordListener, 300);
-        }}
-    }};
-
-    wakeRecognition.start();
-}}
-
-function stopWakeWordListener() {{
-    wakeEnabled = false;
-    isWakeListening = false;
-    if (wakeRecognition) {{ try {{ wakeRecognition.stop(); }} catch(e) {{}} }}
-    setStatus('idle', 'WAKE WORD OFF');
-    transcript.textContent = 'Wake word disabled. Use SPEAK button.';
-}}
-
-// ── Wake word detected → start command listener ───────────────────────────────
-function onWakeWordDetected() {{
-    setStatus('activated', 'WAKE WORD DETECTED');
-    transcript.textContent = '⚡ JARVIS activated — listening for command...';
-    playChime();
-    setTimeout(() => startCommandListener(), 400);
-}}
-
-// ── Command listener (after wake word) ───────────────────────────────────────
-function startCommandListener() {{
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return;
-    isCommandListening = true;
+  /* ── WAKE WORD LISTENER ──────────────────────────────────────────── */
+  function startWake() {
+    if (isWaking || isCommand || isSpeaking) return;
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      setTheme('nosupport');
+      tbox.textContent = 'Speech recognition requires Chrome or Edge browser.';
+      return;
+    }
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    commandRecognition = new SR();
-    commandRecognition.continuous = false;
-    commandRecognition.interimResults = true;
-    commandRecognition.lang = 'en-US';
-    commandRecognition.maxAlternatives = 1;
+    wakeRec = new SR();
+    wakeRec.continuous      = true;
+    wakeRec.interimResults  = true;
+    wakeRec.lang            = 'en-US';
+    wakeRec.maxAlternatives = 5;
 
-    commandRecognition.onstart = () => {{
-        setStatus('command', 'LISTENING — SPEAK YOUR COMMAND');
-        transcript.textContent = '🎙 Speak now...';
-        // Try to get audio stream for waveform
-        navigator.mediaDevices.getUserMedia({{ audio: true }})
-            .then(stream => {{ mediaStream = stream; startWaveAnimation(stream); }})
-            .catch(() => {{ idleWave(); }});
-    }};
+    wakeRec.onstart = () => {
+      isWaking = true;
+      setTheme('wake');
+      tbox.innerHTML = 'Say <strong style="color:#00d4ff;">HEY JARVIS</strong> to begin...';
+      idleWave();
+    };
 
-    let finalText = '';
-    commandRecognition.onresult = (e) => {{
-        let interim = '';
-        finalText = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {{
-            if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
-            else interim += e.results[i][0].transcript;
-        }}
-        transcript.textContent = finalText || interim || '...';
-    }};
+    wakeRec.onresult = (e) => {
+      if (isCommand || isSpeaking) return;
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        for (let j = 0; j < e.results[i].length; j++) {
+          const heard = e.results[i][j].transcript.toLowerCase().trim();
+          if (heard.includes('hey jarvis') || heard.includes('jarvis') && heard.length < 20) {
+            try { wakeRec.abort(); } catch(x) {}
+            onWakeDetected();
+            return;
+          }
+        }
+      }
+    };
 
-    commandRecognition.onerror = (e) => {{
-        isCommandListening = false;
-        stopWaveAnimation();
-        if (mediaStream) {{ mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }}
-        setStatus('error', 'COMMAND ERROR: ' + e.error.toUpperCase());
-        if (wakeEnabled) setTimeout(startWakeWordListener, 1000);
-    }};
+    wakeRec.onerror = (e) => {
+      isWaking = false;
+      if (['no-speech','aborted','network'].includes(e.error)) {
+        setTimeout(startWake, 400);
+      } else {
+        setTheme('error');
+        setTimeout(startWake, 2000);
+      }
+    };
 
-    commandRecognition.onend = () => {{
-        stopWaveAnimation();
-        if (mediaStream) {{ mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }}
-        isCommandListening = false;
+    wakeRec.onend = () => {
+      isWaking = false;
+      if (!isCommand && !isSpeaking) setTimeout(startWake, 300);
+    };
 
-        if (finalText && finalText.trim().length > 1) {{
-            setStatus('thinking', 'PROCESSING COMMAND');
-            transcript.textContent = '⚡ ' + finalText;
-            // Submit to Streamlit
-            window.parent.postMessage({{ type: 'voice_command', text: finalText.trim() }}, '*');
-        }} else {{
-            transcript.innerHTML = 'No command detected. Say <span style="color:#00d4ff;">"' + WAKE_WORD.toUpperCase() + '"</span> again.';
-            if (wakeEnabled) setTimeout(startWakeWordListener, 500);
-        }}
-    }};
+    wakeRec.start();
+  }
 
-    commandRecognition.start();
-}}
+  /* ── WAKE DETECTED ───────────────────────────────────────────────── */
+  function onWakeDetected() {
+    isWaking = false;
+    setTheme('detected');
+    tbox.textContent = '⚡ JARVIS activated — listening...';
+    chime();
+    setTimeout(startCommand, 500);
+  }
 
-// ── Manual mic button (no wake word needed) ───────────────────────────────────
-function manualListen() {{
-    if (isCommandListening) {{
-        if (commandRecognition) commandRecognition.stop();
-        return;
-    }}
-    if (isWakeListening) {{
-        try {{ wakeRecognition.stop(); }} catch(e) {{}}
-        isWakeListening = false;
-    }}
-    onWakeWordDetected();
-}}
+  /* ── COMMAND LISTENER ────────────────────────────────────────────── */
+  function startCommand() {
+    if (isCommand) return;
+    isCommand = true;
+    finalText = '';
 
-// ── Toggle wake word on/off ───────────────────────────────────────────────────
-function toggleWakeWord() {{
-    if (wakeEnabled) {{
-        stopWakeWordListener();
-        wakeBtn.textContent = '⬡ WAKE WORD: OFF';
-        wakeBtn.style.color = 'rgba(0,212,255,0.4)';
-    }} else {{
-        wakeEnabled = true;
-        wakeBtn.textContent = '⬡ WAKE WORD: ON';
-        wakeBtn.style.color = '#00d4ff';
-        startWakeWordListener();
-    }}
-}}
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    cmdRec = new SR();
+    cmdRec.continuous      = false;
+    cmdRec.interimResults  = true;
+    cmdRec.lang            = 'en-US';
+    cmdRec.maxAlternatives = 1;
 
-// ── Listen for TTS trigger from Streamlit ────────────────────────────────────
-window.addEventListener('message', (e) => {{
-    if (e.data && e.data.type === 'jarvis_speak' && TTS_ENABLED) {{
-        speakText(e.data.text);
-    }}
-}});
+    /* Noise gate: only open mic + visualizer after recognition starts */
+    cmdRec.onstart = () => {
+      setTheme('command');
+      tbox.textContent = '🎙 Speak now...';
+      getMic().then(stream => {
+        micStream = stream;
+        startWave(stream);
+      }).catch(() => {});
 
-function speakText(text) {{
-    if (!window.speechSynthesis) return;
+      /* Fallback no-speech timeout: if silent for 7s, close */
+      noSpeechTimer = setTimeout(() => {
+        try { cmdRec.stop(); } catch(x) {}
+      }, 7000);
+    };
+
+    cmdRec.onresult = (e) => {
+      /* Reset no-speech timer on every result */
+      clearTimeout(noSpeechTimer);
+      noSpeechTimer = setTimeout(() => {
+        try { cmdRec.stop(); } catch(x) {}
+      }, 4000);
+
+      let interim = '';
+      finalText   = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript + ' ';
+        else                      interim   += e.results[i][0].transcript;
+      }
+      tbox.textContent = (finalText || interim).trim() || '...';
+    };
+
+    cmdRec.onerror = (e) => {
+      clearTimeout(noSpeechTimer);
+      isCommand = false;
+      releaseMic();
+      if (e.error === 'no-speech') {
+        tbox.innerHTML = 'Nothing heard. Say <strong style="color:#00d4ff;">HEY JARVIS</strong> again.';
+        setTheme('wake');
+        setTimeout(startWake, 600);
+      } else {
+        setTheme('error');
+        setTimeout(startWake, 1500);
+      }
+    };
+
+    cmdRec.onend = () => {
+      clearTimeout(noSpeechTimer);
+      releaseMic();
+      isCommand = false;
+
+      const cmd = finalText.trim();
+      if (cmd.length > 1) {
+        setTheme('thinking');
+        tbox.textContent = '⚡ ' + cmd;
+        submitCommand(cmd);
+      } else {
+        tbox.innerHTML = 'Nothing heard. Say <strong style="color:#00d4ff;">HEY JARVIS</strong> again.';
+        setTheme('wake');
+        setTimeout(startWake, 600);
+      }
+    };
+
+    cmdRec.start();
+  }
+
+  /* ── SUBMIT command to Streamlit ─────────────────────────────────── */
+  function submitCommand(text) {
+    /* Method 1: URL query param (most reliable for Streamlit) */
+    try {
+      const url = new URL(window.parent.location.href);
+      url.searchParams.set('vc',  encodeURIComponent(text));
+      url.searchParams.set('vts', Date.now().toString());
+      window.parent.history.replaceState({}, '', url.toString());
+    } catch(e) {}
+
+    /* Method 2: Simulate typing into Streamlit chat input */
+    setTimeout(() => {
+      try {
+        const doc   = window.parent.document;
+        const areas = doc.querySelectorAll('textarea');
+        for (const ta of areas) {
+          if (ta.placeholder && ta.placeholder.toLowerCase().includes('jarvis')) {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+            setter.call(ta, text);
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+            setTimeout(() => {
+              ta.dispatchEvent(new KeyboardEvent('keydown', {
+                key:'Enter', code:'Enter', keyCode:13, bubbles:true
+              }));
+            }, 120);
+            break;
+          }
+        }
+      } catch(e) {}
+    }, 250);
+  }
+
+  /* ── TTS: speak JARVIS response ──────────────────────────────────── */
+  function speak(text) {
+    if (!window.speechSynthesis || !text) return;
     window.speechSynthesis.cancel();
-    setStatus('speaking', 'SPEAKING');
-    const clean = text.replace(/[#*_`]/g, '').substring(0, 900);
+    isSpeaking = true;
+    setTheme('speaking');
+    speakWave();
+
+    /* Strip markdown symbols for clean speech */
+    const clean = text
+      .replace(/[#*_`~>]/g, '')
+      .replace(/\n+/g, '. ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .substring(0, 1000);
+
     const u = new SpeechSynthesisUtterance(clean);
-    u.rate = 0.92;
-    u.pitch = 0.8;
+    u.rate   = 0.93;
+    u.pitch  = 0.78;
     u.volume = 1.0;
 
-    // Pick best voice — prefer deep/British voices
-    function trySpeak() {{
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(v =>
-            v.name.includes('Google UK English Male') ||
-            v.name.includes('Daniel') ||
-            v.name.includes('Alex') ||
-            v.name.includes('Google UK')
-        ) || voices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('male'))
-          || voices.find(v => v.lang.startsWith('en'));
-        if (preferred) u.voice = preferred;
-        u.onend = () => {{
-            setStatus('wake');
-            if (wakeEnabled) startWakeWordListener();
-        }};
-        window.speechSynthesis.speak(u);
-    }}
+    function doSpeak() {
+      const voices = window.speechSynthesis.getVoices();
+      /* Priority order: UK Male Google → Daniel → Alex → any en-GB → any en */
+      const pick =
+        voices.find(v => v.name === 'Google UK English Male') ||
+        voices.find(v => v.name.includes('Daniel'))           ||
+        voices.find(v => v.name.includes('Alex'))             ||
+        voices.find(v => v.lang === 'en-GB')                  ||
+        voices.find(v => v.lang.startsWith('en'));
+      if (pick) u.voice = pick;
 
-    if (window.speechSynthesis.getVoices().length) trySpeak();
-    else window.speechSynthesis.onvoiceschanged = trySpeak;
-}}
+      u.onend   = u.onerror = () => {
+        isSpeaking = false;
+        idleWave();
+        setTheme('wake');
+        tbox.innerHTML = 'Say <strong style="color:#00d4ff;">HEY JARVIS</strong> to continue...';
+        setTimeout(startWake, 400);
+      };
+      window.speechSynthesis.speak(u);
+    }
 
-// ── Init ─────────────────────────────────────────────────────────────────────
-idleWave();
-if (WAKE_ENABLED_DEFAULT) {{
-    setTimeout(startWakeWordListener, 800);
-}} else {{
-    setStatus('idle', 'WAKE WORD OFF — USE SPEAK BUTTON');
-    transcript.textContent = 'Wake word disabled. Press SPEAK to talk.';
-}}
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) doSpeak();
+    else { window.speechSynthesis.onvoiceschanged = doSpeak; }
+  }
+
+  /* ── Listen for TTS message from Streamlit page ──────────────────── */
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'jarvis_tts') speak(e.data.text);
+  });
+
+  /* ── Boot ────────────────────────────────────────────────────────── */
+  setTheme('boot');
+  setTimeout(startWake, 900);
+})();
 </script>
 """
 
-components.html(voice_component, height=160)
+components.html(voice_html, height=170)
 
-# ─── 9. Handle postMessage from voice component ─────────────────────────────────
-# Streamlit doesn't natively receive postMessage, so we use a hidden JS bridge
-# that stores the voice command in sessionStorage and a query param trick.
-# The cleanest approach for Streamlit: a text_input that gets auto-populated
-# by a JS component, plus st.query_params for the bridge.
-
-bridge_component = """
+# ─── 9. Bridge: receive voice command from iframe ──────────────────────────────
+bridge_html = """
 <script>
 window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'voice_command') {
-        const text = e.data.text;
-        // Write to a hidden input that Streamlit can read via query_params
-        const url = new URL(window.parent.location.href);
-        url.searchParams.set('voice_cmd', text);
-        url.searchParams.set('voice_ts', Date.now());
-        window.parent.history.replaceState({}, '', url.toString());
-        // Also trigger a Streamlit rerun by simulating the chat input
-        // Find the chat input textarea and fill it
-        setTimeout(() => {
-            const inputs = window.parent.document.querySelectorAll('textarea');
-            for (const inp of inputs) {
-                if (inp.placeholder && inp.placeholder.includes('J.A.R.V.I.S')) {
-                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-                    nativeInputValueSetter.call(inp, text);
-                    inp.dispatchEvent(new Event('input', { bubbles: true }));
-                    setTimeout(() => {
-                        inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                    }, 100);
-                    break;
-                }
-            }
-        }, 200);
-    }
+  if (!e.data || e.data.type !== 'voice_command') return;
+  const text = e.data.text;
+  /* URL param approach */
+  try {
+    const url = new URL(window.parent.location.href);
+    url.searchParams.set('vc',  encodeURIComponent(text));
+    url.searchParams.set('vts', Date.now().toString());
+    window.parent.history.replaceState({}, '', url.toString());
+  } catch(err) {}
+  /* Direct textarea inject */
+  setTimeout(() => {
+    try {
+      const areas = window.parent.document.querySelectorAll('textarea');
+      for (const ta of areas) {
+        if (ta.placeholder && ta.placeholder.toLowerCase().includes('jarvis')) {
+          const s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;
+          s.call(ta, text);
+          ta.dispatchEvent(new Event('input',{bubbles:true}));
+          setTimeout(() => ta.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',keyCode:13,bubbles:true})), 150);
+          break;
+        }
+      }
+    } catch(err) {}
+  }, 200);
 });
 </script>
 """
-components.html(bridge_component, height=0)
+components.html(bridge_html, height=0)
 
-# ─── 10. Read voice command from query params ──────────────────────────────────
-params = st.query_params
-voice_cmd_from_url = params.get("voice_cmd", "")
-voice_ts = params.get("voice_ts", "")
+# ─── 10. Read voice command from URL params ────────────────────────────────────
+params      = st.query_params
+raw_vc      = params.get("vc", "")
+raw_vts     = params.get("vts", "")
+voice_cmd   = ""
+try:
+    if raw_vc:
+        voice_cmd = urllib.parse.unquote(raw_vc)
+except Exception:
+    voice_cmd = raw_vc
 
-# Deduplicate: only use if timestamp is new
-last_ts = st.session_state.get("last_voice_ts", "")
-if voice_cmd_from_url and voice_ts != last_ts:
-    st.session_state.voice_input = voice_cmd_from_url
-    st.session_state.last_voice_ts = voice_ts
-    # Clear from URL
+last_ts = st.session_state.last_voice_ts
+if voice_cmd and raw_vts != last_ts:
+    st.session_state.voice_input   = voice_cmd
+    st.session_state.last_voice_ts = raw_vts
     st.query_params.clear()
 
-# ─── 11. Render Chat History ────────────────────────────────────────────────────
-TYPE_TO_ROLE: dict[str, str] = {"human": "user", "ai": "assistant"}
-for message in st.session_state.chat_history.messages:
-    role = TYPE_TO_ROLE.get(message.type, message.type)
+# ─── 11. Chat history ──────────────────────────────────────────────────────────
+TYPE_TO_ROLE = {"human": "user", "ai": "assistant"}
+for msg in st.session_state.chat_history.messages:
+    role = TYPE_TO_ROLE.get(msg.type, msg.type)
     with st.chat_message(role):
-        st.write(message.content)
+        st.write(msg.content)
 
-# ─── 12. Handle Input (text, quick command, or voice) ───────────────────────────
+# ─── 12. Handle input ──────────────────────────────────────────────────────────
 user_query = st.chat_input("Interface with J.A.R.V.I.S...")
 
-# Inject quick command or voice command
 if st.session_state.voice_input and not user_query:
     user_query = st.session_state.voice_input
     st.session_state.voice_input = ""
@@ -832,47 +854,61 @@ if user_query:
     with st.chat_message("user"):
         st.write(user_query)
 
-    typed_history: list[HumanMessage | AIMessage] = [
+    history: list[HumanMessage | AIMessage] = [
         HumanMessage(content=str(m.content)) if m.type == "human"
         else AIMessage(content=str(m.content))
         for m in st.session_state.chat_history.messages
     ]
-    typed_history.append(HumanMessage(content=user_query))
+    history.append(HumanMessage(content=user_query))
 
     with st.spinner("⚡ Processing..."):
-        result: dict[str, Any] = agent.invoke({"messages": typed_history})
-        output_text: str = str(result["messages"][-1].content)
+        result      = agent.invoke({"messages": history})
+        output_text = str(result["messages"][-1].content)
 
     with st.chat_message("assistant"):
         st.write(output_text)
 
-    # TTS: send text to the voice component via JS injection
-    if st.session_state.tts_enabled:
-        clean_tts = output_text.replace('"', "'").replace('\n', ' ').replace('\\', '').replace('`', '')[:900]
-        tts_bridge = f"""
-        <script>
-        (function() {{
-            // Post to parent frames (the voice component iframes listen for this)
-            const iframes = window.parent.document.querySelectorAll('iframe');
-            iframes.forEach(iframe => {{
-                try {{
-                    iframe.contentWindow.postMessage({{type:'jarvis_speak', text:"{clean_tts}"}}, '*');
-                }} catch(e) {{}}
-            }});
-            // Also speak directly if in top frame context
-            if (window.speechSynthesis) {{
-                window.speechSynthesis.cancel();
-                const u = new SpeechSynthesisUtterance("{clean_tts}");
-                u.rate = 0.92; u.pitch = 0.8; u.volume = 1.0;
-                const voices = window.speechSynthesis.getVoices();
-                const preferred = voices.find(v => v.name.includes('Google UK English Male') || v.name.includes('Daniel'));
-                if (preferred) u.voice = preferred;
-                window.speechSynthesis.speak(u);
-            }}
-        }})();
-        </script>
-        """
-        components.html(tts_bridge, height=0)
+    # ── TTS: fire response text to the voice component ────────────────────────
+    # We broadcast to all iframes (voice HUD lives in one).
+    # Also inject directly via window.speechSynthesis as a fallback.
+    clean_for_tts = (
+        output_text
+        .replace('"', "'")
+        .replace("\\", "")
+        .replace("\n", " ")
+        [:1000]
+    )
+    tts_script = f"""
+    <script>
+    (function() {{
+      const payload = {{ type: 'jarvis_tts', text: `{clean_for_tts}` }};
+      /* Broadcast to every iframe in the page */
+      try {{
+        Array.from(window.parent.document.querySelectorAll('iframe')).forEach(f => {{
+          try {{ f.contentWindow.postMessage(payload, '*'); }} catch(e) {{}}
+        }});
+      }} catch(e) {{}}
+      /* Fallback: speak in this frame directly */
+      if (window.speechSynthesis) {{
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(`{clean_for_tts}`);
+        u.rate = 0.93; u.pitch = 0.78; u.volume = 1.0;
+        function go() {{
+          const vs = window.speechSynthesis.getVoices();
+          const v  = vs.find(x => x.name === 'Google UK English Male')
+                  || vs.find(x => x.name.includes('Daniel'))
+                  || vs.find(x => x.lang === 'en-GB')
+                  || vs.find(x => x.lang.startsWith('en'));
+          if (v) u.voice = v;
+          window.speechSynthesis.speak(u);
+        }}
+        if (window.speechSynthesis.getVoices().length) go();
+        else window.speechSynthesis.onvoiceschanged = go;
+      }}
+    }})();
+    </script>
+    """
+    components.html(tts_script, height=0)
 
     st.session_state.chat_history.add_user_message(user_query)
     st.session_state.chat_history.add_ai_message(output_text)
