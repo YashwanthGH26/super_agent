@@ -1,5 +1,12 @@
 import os
 import streamlit as st
+from langchain_anthropic import ChatAnthropic
+
+llm = ChatAnthropic(
+    model="claude-sonnet-4-20250514",
+    api_key=st.secrets["ANTHROPIC_API_KEY"],  # must match secret name
+)
+import streamlit as st
 from langchain_anthropic.chat_models import ChatAnthropic
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
@@ -7,6 +14,7 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from typing import Any
+
 
 # --- 1. System Setup ---
 st.set_page_config(page_title="Super Agent", page_icon="🤖", layout="wide")
