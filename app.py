@@ -44,7 +44,7 @@ SYSTEM_PROMPT = (
 @st.cache_resource
 def build_agent() -> Any:
     llm = ChatAnthropic(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-4-5",
         temperature=0.3,
         api_key=st.secrets["ANTHROPIC_API_KEY"],  # read from secrets only
     )
