@@ -166,6 +166,8 @@ def get_current_datetime() -> str:
     return (
         f"Current local datetime: {now.strftime('%A, %B %d, %Y at %H:%M:%S')}\n"
         f"UTC datetime: {utc.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+        f"CST datetime: {utc.strftime('%Y-%m-%d %H:%M:%S CST')}\n"
+        f"IST datetime: {utc.strftime('%Y-%m-%d %H:%M:%S IST')}\n"
         f"Week number: {now.isocalendar()[1]}\n"
         f"Day of year: {now.timetuple().tm_yday}"
     )
