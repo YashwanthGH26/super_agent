@@ -12,7 +12,7 @@ from typing import Any
 st.set_page_config(page_title="Super Agent", page_icon="🤖", layout="wide")
 st.title("🤖 My Advanced AI Assistant")
 
-os.environ["ANTHROPIC_API_KEY"] = "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"
+os.environ["ANTHROPIC_API_KEY"] = "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"
 
 
 # --- 2. Define File Tools ---
