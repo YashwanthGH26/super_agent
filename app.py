@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 import datetime
 import streamlit as st
@@ -165,7 +166,8 @@ def get_current_datetime() -> str:
     utc = datetime.datetime.utcnow()
     return (
         f"Current local datetime: {now.strftime('%A, %B %d, %Y at %H:%M:%S')}\n"
-        f"IST datetime: {utc.strftime('%Y-%m-%d %H:%M:%S IST')}\n"
+        f"IST datetime: {ist.strftime('%Y-%m-%d %H:%M:%S IST')}\n"
+        f"UTC datetime: {ist.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
         f"Week number: {now.isocalendar()[1]}\n"
         f"Day of year: {now.timetuple().tm_yday}"
     )
@@ -336,15 +338,15 @@ with st.sidebar:
 
 # ─── 8. Always-On Voice HUD ────────────────────────────────────────────────────
 # Fully hands-free like Siri/Alexa:
-    • Continuous background listening for wake word "hey jarvis"
-    • On detection → chime → command listening with noise suppression
-    • Auto-submit on silence → agent replies → TTS speaks back
-    • Returns to wake-word listening automatically
+#   - Continuous background listening for wake word "hey jarvis"
+#   - On detection -> chime -> command listening with noise suppression
+#   - Auto-submit on silence -> agent replies -> TTS speaks back
+#   - Returns to wake-word listening automatically
 #
 # Noise suppression via:
-    • Web Audio API noise gate (filters mic input below threshold)
-    • SpeechRecognition with no-speech timeout handling
-    • Debounced final-result detection (ignores sub-word fragments)
+#   - Web Audio API noise gate (filters mic input below threshold)
+#   - SpeechRecognition with no-speech timeout handling
+#   - Debounced final-result detection (ignores sub-word fragments)
 
 voice_html = """
 <div id="jarvis-voice" style="
@@ -736,8 +738,8 @@ voice_html = """
     /* Strip markdown symbols for clean speech */
     const clean = text
       .replace(/[#*_`~>]/g, '')
-      .replace(/\n+/g, '. ')
-      .replace(/\s{2,}/g, ' ')
+      .replace(/\\n+/g, '. ')
+      .replace(/\\s{2,}/g, ' ')
       .trim()
       .substring(0, 1000);
 
@@ -748,7 +750,7 @@ voice_html = """
 
     function doSpeak() {
       const voices = window.speechSynthesis.getVoices();
-      /* Priority order: UK Male Google → Daniel → Alex → any en-GB → any en */
+      /* Priority order: UK Male Google -> Daniel -> Alex -> any en-GB -> any en */
       const pick =
         voices.find(v => v.name === 'Google UK English Male') ||
         voices.find(v => v.name.includes('Daniel'))           ||
