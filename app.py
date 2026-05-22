@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/jarvis_app.py << 'ENDOFFILE'
 # -*- coding: utf-8 -*-
 import re
 import json
@@ -998,5 +997,3 @@ h2{font-family:'Orbitron',monospace;font-size:0.85rem;color:rgba(0,212,255,0.7);
 </script>
 </body></html>"""
     components.html(music_html, height=860, scrolling=True)
-ENDOFFILE
-echo "Done. Lines: $(wc -l < /mnt/user-data/outputs/jarvis_app.py)"
