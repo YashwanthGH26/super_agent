@@ -404,7 +404,7 @@ html,body{{background:transparent;overflow:hidden;height:190px;}}
   animation:orb-ring 2.5s ease-in-out infinite;
 }}
 @keyframes orb-ring{{0%,100%{{transform:scale(1);opacity:0.3;}}50%{{transform:scale(1.4);opacity:0.08;}}}}
-#orb:hover{{transform:scale(1.15);}}}#orb:active{{transform:scale(0.9);}}
+#orb:hover{{transform:scale(1.15);}} #orb:active{{transform:scale(0.9);}}
 #st{{font-family:'Orbitron',monospace;font-size:0.58rem;letter-spacing:0.2em;color:rgba(0,212,255,0.45);flex:1;}}
 #hint{{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(0,212,255,0.25);white-space:nowrap;}}
 #wave{{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:40px;margin-bottom:10px;}}
