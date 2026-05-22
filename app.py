@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-J.A.R.V.I.S - Ultimate Voice Agent  (Bug-Fix Build)
+J.A.R.V.I.S - Tony Stark Edition (Complete Rebuild)
 
-FIX 1 - Voice/Submit: replaceState alone doesn't trigger Streamlit rerun.
-         Added window.parent.location.href navigation as primary trigger.
-FIX 2 - ORB Interrupt: speechSynthesis lives in the PARENT frame, not the
-         sandboxed iframe. Component now speaks via the PARENT frame using
-         a shared localStorage flag polled by a second components.html().
-FIX 3 - Music: Deezer JSONP blocked by Streamlit Cloud CSP.
-         Switched to iTunes Search API (CORS-open, no auth, global catalog
-         including Telugu, Hindi, Tamil, Kannada via country=in).
+ROOT CAUSE FIXES:
+- Voice reply not working: st.markdown TTS script gets stripped by Streamlit's
+  HTML sanitizer. Fix: embed TTS trigger directly inside the SAME voice iframe
+  via Python f-string injection (tts_seq + tts_text). The iframe detects the
+  new seq on every rerender and speaks immediately in its own window context.
+- Music 30s limit: iTunes only gives 30s previews. Switched to YouTube IFrame
+  API for full songs - user searches, picks, plays full tracks legally.
+- Chat input white background: fixed with proper CSS selector.
+- CST/IST time confirmed in tool.
 """
 import json
 import datetime
@@ -28,19 +29,17 @@ import urllib.parse
 st.set_page_config(page_title="J.A.R.V.I.S", page_icon="⚡", layout="wide")
 
 # ================================================================
-# GLOBAL CSS  - Arc Reactor Theme
+# GLOBAL CSS
 # ================================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600&display=swap');
 
 :root {
-  --arc:    #00d4ff; --arc2:  #00aadd;
-  --gold:   #f5a623; --gold2: #ffcc44;
-  --red:    #c0183a; --plasma:#8b5cf6;
-  --green:  #10b981; --void:  #020b18;
-  --deep:   #040f1e; --panel: rgba(4,15,30,0.94);
-  --border: rgba(0,212,255,0.2); --text: #a8d4e8;
+  --arc:#00d4ff; --arc2:#00aadd; --gold:#f5a623; --gold2:#ffcc44;
+  --red:#c0183a; --plasma:#8b5cf6; --green:#10b981;
+  --void:#020b18; --deep:#040f1e; --panel:rgba(4,15,30,0.94);
+  --border:rgba(0,212,255,0.2); --text:#a8d4e8;
 }
 *,*::before,*::after{box-sizing:border-box;}
 html,body,[data-testid="stAppViewContainer"]{
@@ -52,16 +51,17 @@ html,body,[data-testid="stAppViewContainer"]{
   content:''; position:fixed; inset:0; z-index:0;
   background:
     radial-gradient(ellipse 60% 40% at 50% -10%,rgba(0,170,221,0.18) 0%,transparent 70%),
-    radial-gradient(ellipse 30% 25% at 85% 90%,rgba(139,92,246,0.10) 0%,transparent 60%),
-    radial-gradient(ellipse 25% 30% at 5%  70%,rgba(192,24,58,0.07)  0%,transparent 60%),
-    repeating-linear-gradient(0deg,  transparent,transparent 44px,rgba(0,212,255,0.025) 44px,rgba(0,212,255,0.025) 45px),
-    repeating-linear-gradient(90deg, transparent,transparent 44px,rgba(0,212,255,0.025) 44px,rgba(0,212,255,0.025) 45px);
+    radial-gradient(ellipse 30% 25% at 85% 90%,rgba(139,92,246,0.1) 0%,transparent 60%),
+    radial-gradient(ellipse 25% 30% at 5% 70%,rgba(192,24,58,0.07) 0%,transparent 60%),
+    repeating-linear-gradient(0deg,transparent,transparent 44px,rgba(0,212,255,0.025) 44px,rgba(0,212,255,0.025) 45px),
+    repeating-linear-gradient(90deg,transparent,transparent 44px,rgba(0,212,255,0.025) 44px,rgba(0,212,255,0.025) 45px);
   pointer-events:none;
 }
 [data-testid="stHeader"]{background:transparent!important;border-bottom:1px solid rgba(0,212,255,0.08)!important;}
 [data-testid="stSidebar"]{background:rgba(2,11,24,0.98)!important;border-right:1px solid rgba(0,212,255,0.15)!important;}
 [data-testid="stSidebar"]>div{padding-top:1rem!important;}
 
+/* TITLE */
 .j-title{
   font-family:'Orbitron',monospace; font-size:clamp(1.8rem,4vw,3rem); font-weight:900;
   text-align:center; letter-spacing:0.5em; padding:1.5rem 0 0.3rem;
@@ -76,35 +76,50 @@ html,body,[data-testid="stAppViewContainer"]{
   color:rgba(0,212,255,0.4); text-align:center; letter-spacing:0.55em;
   text-transform:uppercase; margin-bottom:1.2rem;
 }
+/* PANELS */
 .j-panel{
-  background:var(--panel); border:1px solid var(--border);
-  border-radius:4px; padding:0.85rem 1rem; margin-bottom:0.8rem;
-  position:relative; backdrop-filter:blur(16px);
+  background:var(--panel); border:1px solid var(--border); border-radius:4px;
+  padding:0.85rem 1rem; margin-bottom:0.8rem; position:relative; backdrop-filter:blur(16px);
 }
 .j-panel::before{content:'';position:absolute;top:0;left:0;width:24px;height:1px;background:var(--arc);}
-.j-panel::after {content:'';position:absolute;bottom:0;right:0;width:24px;height:1px;background:var(--arc);}
+.j-panel::after{content:'';position:absolute;bottom:0;right:0;width:24px;height:1px;background:var(--arc);}
 .j-label{font-family:'Orbitron',monospace;font-size:0.52rem;color:rgba(0,212,255,0.45);letter-spacing:0.3em;text-transform:uppercase;margin-bottom:0.3rem;}
-.j-val  {font-family:'Share Tech Mono',monospace;font-size:1.05rem;color:var(--arc);}
+.j-val{font-family:'Share Tech Mono',monospace;font-size:1.05rem;color:var(--arc);}
+/* CHAT */
 [data-testid="stChatMessage"]{
   background:rgba(4,15,30,0.85)!important; border:1px solid rgba(0,212,255,0.12)!important;
   border-radius:4px!important; margin-bottom:0.5rem!important; backdrop-filter:blur(12px)!important;
 }
-[data-testid="stChatInput"] textarea{
-  background:rgba(2,11,24,0.97)!important; border:1px solid rgba(0,212,255,0.25)!important;
+/* CHAT INPUT - multiple selectors to cover Streamlit versions */
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInputContainer"],
+[data-testid="stChatInputContainer"] > div {
+  background:rgba(2,11,24,0.97)!important;
+  border-color:rgba(0,212,255,0.25)!important;
+}
+[data-testid="stChatInput"] textarea,
+textarea[data-testid="stChatInputTextArea"] {
+  background:rgba(2,11,24,0.97)!important;
+  border:1px solid rgba(0,212,255,0.25)!important;
   color:var(--arc)!important; font-family:'Share Tech Mono',monospace!important;
   font-size:0.9rem!important; border-radius:4px!important; caret-color:var(--arc);
 }
 [data-testid="stChatInput"] textarea:focus{border-color:var(--arc)!important;box-shadow:0 0 20px rgba(0,212,255,0.15)!important;}
+/* Override any white backgrounds in bottom bar */
+.stChatFloatingInputContainer, .stChatFloatingInputContainer > div,
+section[data-testid="stBottom"], section[data-testid="stBottom"] > div {
+  background:rgba(2,11,24,0.97)!important;
+  border-top:1px solid rgba(0,212,255,0.1)!important;
+}
+/* BUTTONS */
 .stButton>button{
   background:transparent!important; border:1px solid rgba(0,212,255,0.2)!important;
   color:rgba(0,212,255,0.75)!important; font-family:'Orbitron',monospace!important;
   font-size:0.58rem!important; letter-spacing:0.1em!important; border-radius:3px!important;
   padding:0.4rem 0.8rem!important; transition:all 0.2s!important;
 }
-.stButton>button:hover{
-  background:rgba(0,212,255,0.07)!important; border-color:var(--arc)!important;
-  color:var(--arc)!important; box-shadow:0 0 12px rgba(0,212,255,0.2)!important;
-}
+.stButton>button:hover{background:rgba(0,212,255,0.07)!important;border-color:var(--arc)!important;color:var(--arc)!important;box-shadow:0 0 12px rgba(0,212,255,0.2)!important;}
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);}
 ::-webkit-scrollbar-thumb{background:rgba(0,212,255,0.25);border-radius:2px;}
@@ -112,6 +127,7 @@ html,body,[data-testid="stAppViewContainer"]{
 [data-testid="stTabs"] [role="tab"]{font-family:'Orbitron',monospace!important;font-size:0.6rem!important;letter-spacing:0.15em!important;color:rgba(0,212,255,0.5)!important;}
 [data-testid="stTabs"] [role="tab"][aria-selected="true"]{color:var(--arc)!important;border-bottom-color:var(--arc)!important;}
 .j-cap{font-size:0.78rem;color:rgba(0,212,255,0.6);padding:2px 0;font-family:'Share Tech Mono',monospace;}
+/* ARC REACTOR */
 .arc-ring{width:60px;height:60px;border-radius:50%;border:2px solid rgba(0,212,255,0.3);display:flex;align-items:center;justify-content:center;margin:0.5rem auto;position:relative;animation:arc-spin 8s linear infinite;}
 .arc-ring::before{content:'';position:absolute;inset:4px;border-radius:50%;border:1px solid rgba(0,212,255,0.2);animation:arc-spin 4s linear infinite reverse;}
 .arc-core{width:20px;height:20px;border-radius:50%;background:radial-gradient(circle,#00e5ff,#0088bb);box-shadow:0 0 15px #00d4ff,0 0 30px rgba(0,212,255,0.5);animation:core-pulse 2s ease-in-out infinite;}
@@ -120,9 +136,7 @@ html,body,[data-testid="stAppViewContainer"]{
 </style>
 """, unsafe_allow_html=True)
 
-# ================================================================
 # HEADER
-# ================================================================
 st.markdown('<div class="j-title">J.A.R.V.I.S</div>', unsafe_allow_html=True)
 st.markdown('<div class="j-sub">Just A Rather Very Intelligent System &nbsp;&middot;&nbsp; Arc Reactor Online</div>', unsafe_allow_html=True)
 
@@ -151,7 +165,7 @@ def set_reminder(task: str, minutes: int) -> str:
     return (
         f"I appreciate the request, but I must be transparent: I cannot schedule "
         f"live notifications for '{task}' in {minutes} minutes. My architecture is "
-        f"on-demand with no persistent background process. Please use your device's clock or calendar."
+        f"on-demand with no persistent background process. Please use your device clock or calendar."
     )
 
 @tool
@@ -178,8 +192,8 @@ def get_weather(city: str) -> str:
                  45:"Foggy",51:"Light drizzle",61:"Light rain",63:"Moderate rain",
                  65:"Heavy rain",71:"Light snow",80:"Rain showers",95:"Thunderstorm"}
         return (f"{name}, {country}: {codes.get(c['weather_code'],'Unknown')}, "
-                f"{c['temperature_2m']}C, Humidity {c['relative_humidity_2m']}%, "
-                f"Wind {c['wind_speed_10m']} kmh")
+                f"{c['temperature_2m']} degrees Celsius, "
+                f"Humidity {c['relative_humidity_2m']} percent, Wind {c['wind_speed_10m']} kmh")
     except Exception as e:
         return f"Weather lookup failed: {e}"
 
@@ -220,7 +234,7 @@ def analyze_trend(subject: str) -> str:
 
 @tool
 def predict_insights(domain: str) -> str:
-    """Generates data-driven predictive insights for a domain.
+    """Generates predictive insights for a domain.
     Args:
         domain: Domain to forecast.
     """
@@ -231,9 +245,9 @@ def predict_insights(domain: str) -> str:
 
 @tool
 def search_music(query: str) -> str:
-    """Searches for music tracks using iTunes API (supports Indian music).
+    """Searches for music using iTunes API. Returns track info for display.
     Args:
-        query: Song, artist, or album name to search.
+        query: Song, artist, or album name.
     """
     try:
         url = (f"https://itunes.apple.com/search?term={urllib.parse.quote(query)}"
@@ -284,13 +298,15 @@ Personality: Tony Stark's AI. Calm, precise, confident, occasionally witty.
 
 CRITICAL RULES:
 - Always use tools for live data. Never guess dates, weather, news, or music.
-- Voice responses: CONCISE. 1-3 sentences for simple queries. Max 4 for complex.
-- NO markdown in responses. No **, ##, -, *, backticks. Plain sentences only.
-- JARVIS phrases: "Certainly", "Right away", "Analysis complete", "Noted, sir".
-- Lead with the answer first. Detail second.
-- Reminders/alarms: use set_reminder tool.
-- Music queries: use search_music tool then tell the user what was found naturally.
-- For Indian music (Telugu, Hindi, Tamil, Kannada): search_music tool supports it.
+- Voice responses: CONCISE. Max 2-3 sentences for simple queries. Max 4 for complex.
+- ZERO markdown in responses. No **, ##, -, *, backticks. Plain conversational sentences only.
+- JARVIS style phrases: Certainly, Right away, Analysis complete, Noted sir, Of course.
+- Lead with the direct answer first. Detail second.
+- For time questions: use get_current_datetime and always give CST and IST.
+- Reminders/alarms: use set_reminder tool to explain honestly.
+- Music: use search_music tool, then describe what was found in one sentence.
+- For Indian music (Telugu, Hindi, Tamil, Kannada): search_music fully supports it.
+- Never say UTC - always convert to CST or IST before answering.
 """
 
 @st.cache_resource
@@ -316,12 +332,10 @@ for k, v in defaults.items():
         st.session_state[k] = v if v is not None else InMemoryChatMessageHistory()
 
 # ================================================================
-# FIX 1 - VOICE BRIDGE: read URL params written by the voice iframe
-# Primary trigger: ?vc=...&vts=... in the URL
-# When Streamlit detects new query params it reruns automatically.
+# VOICE COMMAND FROM URL PARAMS (JS -> Python bridge)
 # ================================================================
 params  = st.query_params
-raw_vc  = params.get("vc",  "")
+raw_vc  = params.get("vc", "")
 raw_vts = params.get("vts", "")
 try:
     voice_cmd = urllib.parse.unquote(raw_vc) if raw_vc else ""
@@ -344,12 +358,13 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="j-label">System Status</div>', unsafe_allow_html=True)
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    ist_now = now + datetime.timedelta(hours=5, minutes=30)
     st.markdown(f"""
     <div class="j-panel">
       <div class="j-val" style="color:#10b981;font-size:0.85rem;">&#9679; ALL SYSTEMS NOMINAL</div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:rgba(0,212,255,0.5);margin-top:4px;">
-        {now.strftime('%H:%M:%S')} &nbsp;|&nbsp; {now.strftime('%d %b %Y')}
+        IST {ist_now.strftime('%H:%M:%S')} &nbsp;|&nbsp; {ist_now.strftime('%d %b %Y')}
       </div>
     </div>""", unsafe_allow_html=True)
 
@@ -357,13 +372,14 @@ with st.sidebar:
     st.markdown("""
     <div class="j-panel" style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:rgba(0,212,255,0.6);line-height:1.9;">
       <span style="color:#00d4ff;">HEY JARVIS</span> &rarr; activate<br>
-      Speak &rarr; auto-submit<br>
+      Speak command &rarr; auto-submit<br>
+      JARVIS speaks reply back<br>
       <span style="color:#f5a623;">TAP ORB</span> &rarr; interrupt speech<br>
-      <span style="color:rgba(0,212,255,0.35);">Chrome / Edge only</span>
+      <span style="color:rgba(0,212,255,0.35);">Chrome / Edge required</span>
     </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="j-label" style="margin-top:0.6rem;">Capabilities</div>', unsafe_allow_html=True)
-    for cap in ["&#127925; Music (Global+Indian)","&#128269; Web Search","&#127780; Live Weather",
+    for cap in ["&#127925; Music (Full Songs)","&#128269; Web Search","&#127780; Live Weather",
                 "&#128240; Global News","&#128202; Trend Analysis","&#128302; Forecasting",
                 "&#128337; Reminders","&#128336; CST / IST Time"]:
         st.markdown(f'<div class="j-cap">{cap}</div>', unsafe_allow_html=True)
@@ -375,8 +391,8 @@ with st.sidebar:
         "&#127780; Weather NYC":      "What is the weather in New York right now?",
         "&#128240; Tech News":        "Get me the latest AI and technology news",
         "&#128202; AI Trends":        "Analyze current AI trends and future outlook",
-        "&#127925; Bollywood Music":  "Search for popular Bollywood songs by Arijit Singh",
-        "&#127925; Telugu Music":     "Search for popular Telugu songs by SP Balasubrahmanyam",
+        "&#127925; Arijit Singh":     "Search for popular Bollywood songs by Arijit Singh",
+        "&#127925; Telugu Songs":     "Search for popular Telugu songs by Sid Sriram",
         "&#128337; Reminder Info":    "Set a reminder for my meeting in 30 minutes",
     }
     for label, cmd in cmds.items():
@@ -397,93 +413,33 @@ with st.sidebar:
 tab_chat, tab_music = st.tabs(["⚡  JARVIS INTERFACE", "🎵  MUSIC STATION"])
 
 # ================================================================
-# TAB 1: CHAT + VOICE HUD
+# TAB 1: CHAT + VOICE
 # ================================================================
 with tab_chat:
 
     tts_safe = st.session_state.tts_text
     tts_seq  = st.session_state.tts_seq
 
-    # ------------------------------------------------------------------
-    # FIX 2 - ORB INTERRUPT & TTS
-    # Root cause: components.html() is a sandboxed iframe. speechSynthesis
-    # in the iframe is separate from the parent. The ORB's cancel() call
-    # only cancels the iframe's synthesis queue (empty), not what the
-    # parent-frame TTS is saying.
-    #
-    # Solution: Put TTS entirely in the PARENT frame via a tiny injected
-    # <script> that is part of the main Streamlit page (st.markdown with
-    # unsafe_allow_html). Use localStorage as the shared memory bus:
-    #   - Python writes tts_text/tts_seq into the voice HUD f-string
-    #   - A st.markdown <script> in the PARENT frame polls localStorage
-    #     every 200ms and calls speechSynthesis.speak() in the parent
-    #   - ORB click writes localStorage flag "jarvis_interrupt=1" which
-    #     the parent-frame poller detects and calls cancel()
-    # ------------------------------------------------------------------
+    # KEY FIX: The entire voice system - wake word, command, TTS output, ORB interrupt
+    # lives in ONE single components.html() call.
+    # TTS_TEXT and TTS_SEQ are injected by Python on EVERY rerender via f-string.
+    # When tts_seq changes (new reply), JS detects it via localStorage comparison
+    # and speaks immediately in the same iframe context - no cross-frame issues.
+    # ORB interrupt calls window.speechSynthesis.cancel() in the SAME frame.
+    # Voice submit navigates parent URL to trigger Streamlit rerun.
 
-    # Parent-frame TTS engine (injected into Streamlit's own page)
-    parent_tts_js = f"""
-<script>
-(function() {{
-  const TTS_SEQ  = {tts_seq};
-  const TTS_TEXT = {json.dumps(tts_safe)};
-  const SKEY     = 'jv_spoken_seq';
-  const IKEY     = 'jarvis_interrupt';
-
-  // Speak if new seq
-  const lastSeq = parseInt(localStorage.getItem(SKEY) || '0', 10);
-  if (TTS_TEXT && TTS_SEQ > 0 && TTS_SEQ !== lastSeq) {{
-    localStorage.setItem(SKEY, TTS_SEQ);
-    localStorage.removeItem(IKEY);
-    // Small delay so DOM settles
-    setTimeout(function() {{
-      if (!window.speechSynthesis) return;
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(TTS_TEXT);
-      u.rate = 0.88; u.pitch = 0.72; u.volume = 1.0;
-      function go() {{
-        const vs = window.speechSynthesis.getVoices();
-        const pick =
-          vs.find(v => v.name === 'Google UK English Male') ||
-          vs.find(v => v.name.includes('Daniel'))           ||
-          vs.find(v => v.name.includes('David'))            ||
-          vs.find(v => v.lang === 'en-GB')                  ||
-          vs.find(v => v.lang.startsWith('en'));
-        if (pick) u.voice = pick;
-
-        // Poll for interrupt signal from ORB
-        const pollId = setInterval(function() {{
-          if (localStorage.getItem(IKEY) === '1') {{
-            window.speechSynthesis.cancel();
-            localStorage.removeItem(IKEY);
-            clearInterval(pollId);
-            // Signal HUD to go back to wake state
-            localStorage.setItem('jv_after_interrupt', '1');
-          }}
-        }}, 150);
-
-        u.onend = u.onerror = function() {{ clearInterval(pollId); }};
-        window.speechSynthesis.speak(u);
-      }}
-      if (window.speechSynthesis.getVoices().length) go();
-      else window.speechSynthesis.onvoiceschanged = go;
-    }}, 400);
-  }}
-}})();
-</script>
-"""
-    st.markdown(parent_tts_js, unsafe_allow_html=True)
-
-    # Voice HUD component (handles wake word, command, ORB - sets localStorage flags)
-    voice_html = f"""
+    voice_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
 *{{box-sizing:border-box;margin:0;padding:0;}}
-body{{background:transparent;overflow:hidden;}}
+html,body{{background:transparent;overflow:hidden;height:185px;}}
 #jv{{
   background:linear-gradient(160deg,rgba(4,15,30,0.98) 0%,rgba(2,8,20,0.99) 100%);
   border:1px solid rgba(0,212,255,0.22); border-radius:8px;
-  padding:14px 18px 12px; position:relative; overflow:hidden;
+  padding:14px 18px 12px; position:relative; overflow:hidden; height:100%;
 }}
 #jv::before{{
   content:'';position:absolute;top:0;left:-100%;width:60%;height:1px;
@@ -496,7 +452,7 @@ body{{background:transparent;overflow:hidden;}}
 .bl{{bottom:0;left:0;border-width:0 0 1px 1px;}} .br{{bottom:0;right:0;border-width:0 1px 1px 0;}}
 #row{{display:flex;align-items:center;gap:12px;margin-bottom:10px;}}
 #orb{{
-  width:18px;height:18px;border-radius:50%;flex-shrink:0;
+  width:20px;height:20px;border-radius:50%;flex-shrink:0;
   background:#0a1a2a; box-shadow:0 0 0 rgba(0,212,255,0);
   transition:background 0.25s,box-shadow 0.3s,transform 0.15s;
   cursor:pointer; position:relative;
@@ -507,19 +463,24 @@ body{{background:transparent;overflow:hidden;}}
   animation:orb-ring 2.5s ease-in-out infinite;
 }}
 @keyframes orb-ring{{0%,100%{{transform:scale(1);opacity:0.3;}}50%{{transform:scale(1.4);opacity:0.08;}}}}
-#orb:hover{{transform:scale(1.15);}} #orb:active{{transform:scale(0.9);}}
+#orb:hover{{transform:scale(1.15);cursor:pointer;}} #orb:active{{transform:scale(0.9);}}
 #status{{font-family:'Orbitron',monospace;font-size:0.58rem;letter-spacing:0.2em;color:rgba(0,212,255,0.45);flex:1;}}
 #hint{{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(0,212,255,0.25);white-space:nowrap;}}
-#wave{{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:38px;margin-bottom:10px;}}
+#wave{{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:40px;margin-bottom:10px;}}
 .b{{width:3px;border-radius:2px 2px 0 0;background:rgba(0,212,255,0.15);transition:height 0.07s,background 0.1s;}}
-#tbox{{font-family:'Share Tech Mono',monospace;font-size:0.82rem;color:#00d4ff;text-align:center;min-height:20px;letter-spacing:0.04em;line-height:1.4;}}
+#tbox{{
+  font-family:'Share Tech Mono',monospace;font-size:0.82rem;color:#00d4ff;
+  text-align:center;min-height:20px;letter-spacing:0.04em;line-height:1.4;
+  padding:2px 4px;
+}}
 </style>
-
+</head>
+<body>
 <div id="jv">
   <div class="c tl"></div><div class="c tr"></div>
   <div class="c bl"></div><div class="c br"></div>
   <div id="row">
-    <div id="orb" title="Tap to interrupt JARVIS" onclick="orbInterrupt()"></div>
+    <div id="orb" onclick="orbInterrupt()" title="Tap to interrupt JARVIS"></div>
     <span id="status">ARC REACTOR INITIALIZING...</span>
     <span id="hint">TAP ORB TO INTERRUPT</span>
   </div>
@@ -531,263 +492,282 @@ body{{background:transparent;overflow:hidden;}}
 </div>
 
 <script>
-(function() {{
+// ── INJECTED BY PYTHON ON EVERY RENDER ─────────────────────────
+const TTS_TEXT = {json.dumps(tts_safe)};
+const TTS_SEQ  = {tts_seq};
 
-  // FIX 2: ORB sets a localStorage flag - the parent-frame TTS engine polls it
-  window.orbInterrupt = function() {{
-    localStorage.setItem('jarvis_interrupt', '1');
-    theme('interrupt');
-    idle();
-    tbox.innerHTML = 'Interrupted. Say <strong style="color:#00ffff;">HEY JARVIS</strong>...';
-    setTimeout(startWake, 400);
-  }};
+// ── DOM ─────────────────────────────────────────────────────────
+const orb    = document.getElementById('orb');
+const status = document.getElementById('status');
+const tbox   = document.getElementById('tbox');
+const bars   = Array.from(document.querySelectorAll('.b'));
 
-  // Poll for "after interrupt" signal from parent TTS to sync HUD state
-  setInterval(function() {{
-    if (localStorage.getItem('jv_after_interrupt') === '1') {{
-      localStorage.removeItem('jv_after_interrupt');
-      theme('wake');
-      tbox.innerHTML = 'Say <strong style="color:#00ffff;">HEY JARVIS</strong> to continue...';
-      setTimeout(startWake, 300);
-    }}
-  }}, 200);
+// ── STATE ───────────────────────────────────────────────────────
+let wakeRec=null, cmdRec=null;
+let isWaking=false, isCommand=false, isSpeaking=false;
+let micStream=null, audioCtx=null, rafId=null, silTimer=null;
+let finalText='';
 
-  // Poll for speaking state to animate waveform while TTS is active
-  // (parent-frame TTS, so we can't directly query its state from iframe)
-  const SKEY = 'jv_spoken_seq';
-  let lastKnownSeq = parseInt(localStorage.getItem(SKEY) || '0', 10);
-  setInterval(function() {{
-    const curSeq = parseInt(localStorage.getItem(SKEY) || '0', 10);
-    if (curSeq !== lastKnownSeq) {{
-      lastKnownSeq = curSeq;
-      // New TTS started - show speaking theme for a moment
-      if (!isWaking && !isCommand) {{
-        theme('speaking');
-        speakWave();
-        // Will revert when interrupt or after a timeout
-        setTimeout(function() {{
-          if (!isWaking && !isCommand) {{
-            theme('wake');
-            idle();
-          }}
-        }}, 30000); // max 30s fallback
-      }}
-    }}
-  }}, 300);
+// ── THEMES ──────────────────────────────────────────────────────
+const T = {{
+  boot:     {{d:'#0a1a2a', g:'none',                            s:'ARC REACTOR INITIALIZING'}},
+  wake:     {{d:'#00d4ff', g:'0 0 14px rgba(0,212,255,0.75)',   s:'LISTENING FOR WAKE WORD'}},
+  detected: {{d:'#00ff88', g:'0 0 16px rgba(0,255,136,0.8)',    s:'WAKE DETECTED'}},
+  command:  {{d:'#8b5cf6', g:'0 0 16px rgba(139,92,246,0.8)',   s:'LISTENING - SPEAK NOW'}},
+  thinking: {{d:'#f5a623', g:'0 0 16px rgba(245,166,35,0.75)',  s:'NEURAL NET PROCESSING'}},
+  speaking: {{d:'#c0183a', g:'0 0 18px rgba(192,24,58,0.85)',   s:'SPEAKING - TAP ORB TO STOP'}},
+  interrupt:{{d:'#ff6b35', g:'0 0 14px rgba(255,107,53,0.8)',   s:'INTERRUPTED'}},
+  error:    {{d:'#ff3333', g:'none',                            s:'ERROR - RETRYING'}},
+  noapi:    {{d:'#ff3333', g:'none',                            s:'CHROME OR EDGE REQUIRED'}},
+}};
+function theme(k) {{
+  const t=T[k]||T.boot;
+  orb.style.background=t.d; orb.style.boxShadow=t.g; status.textContent=t.s;
+}}
 
-  const orb    = document.getElementById('orb');
-  const status = document.getElementById('status');
-  const tbox   = document.getElementById('tbox');
-  const bars   = Array.from(document.querySelectorAll('.b'));
+// ── WAVEFORM ────────────────────────────────────────────────────
+function idle() {{
+  bars.forEach((b,i)=>{{b.style.height=(4+Math.sin(i*0.55)*4)+'px';b.style.background='rgba(0,212,255,0.15)';}});
+}}
+function liveWave(stream) {{
+  stopWave();
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const an=audioCtx.createAnalyser(); an.fftSize=128;
+  audioCtx.createMediaStreamSource(stream).connect(an);
+  const data=new Uint8Array(an.frequencyBinCount);
+  (function fr() {{
+    an.getByteFrequencyData(data);
+    bars.forEach((b,i)=>{{
+      const v=data[Math.floor(i*data.length/bars.length)];
+      b.style.height=Math.max(4,(v/255)*36)+'px';
+      b.style.background='rgba(139,92,246,'+(0.35+v/550)+')';
+    }});
+    rafId=requestAnimationFrame(fr);
+  }})();
+}}
+function speakWave() {{
+  let t=0;
+  if(rafId) cancelAnimationFrame(rafId);
+  (function fr() {{
+    t+=0.12;
+    bars.forEach((b,i)=>{{
+      b.style.height=(5+Math.abs(Math.sin(t+i*0.38))*30)+'px';
+      b.style.background='rgba('+(Math.round(192+Math.sin(t+i*0.5)*40))+',24,58,0.8)';
+    }});
+    if(isSpeaking) rafId=requestAnimationFrame(fr); else idle();
+  }})();
+}}
+function stopWave() {{
+  if(rafId){{cancelAnimationFrame(rafId);rafId=null;}}
+  if(audioCtx){{audioCtx.close().catch(()=>{{}});audioCtx=null;}}
+  idle();
+}}
 
-  let wakeRec=null, cmdRec=null;
-  let isWaking=false, isCommand=false;
-  let micStream=null, audioCtx=null, rafId=null, silTimer=null;
-  let finalText='';
+// ── CHIME ───────────────────────────────────────────────────────
+function chime() {{
+  try {{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    [[440,0],[554,0.1],[659,0.2],[880,0.3]].forEach(function(fd) {{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='sine'; o.frequency.value=fd[0];
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0,ctx.currentTime+fd[1]);
+      g.gain.linearRampToValueAtTime(0.18,ctx.currentTime+fd[1]+0.05);
+      g.gain.linearRampToValueAtTime(0,ctx.currentTime+fd[1]+0.3);
+      o.start(ctx.currentTime+fd[1]); o.stop(ctx.currentTime+fd[1]+0.35);
+    }});
+  }} catch(e) {{}}
+}}
 
-  const T = {{
-    boot:      {{d:'#0a1a2a',g:'none',                             s:'ARC REACTOR INITIALIZING'}},
-    wake:      {{d:'#00d4ff',g:'0 0 14px rgba(0,212,255,0.75)',    s:'LISTENING FOR WAKE WORD'}},
-    detected:  {{d:'#00ff88',g:'0 0 16px rgba(0,255,136,0.8)',     s:'WAKE DETECTED - READY'}},
-    command:   {{d:'#8b5cf6',g:'0 0 16px rgba(139,92,246,0.8)',    s:'LISTENING - SPEAK NOW'}},
-    thinking:  {{d:'#f5a623',g:'0 0 16px rgba(245,166,35,0.75)',   s:'NEURAL NET PROCESSING'}},
-    speaking:  {{d:'#c0183a',g:'0 0 18px rgba(192,24,58,0.85)',    s:'SPEAKING - TAP ORB TO STOP'}},
-    interrupt: {{d:'#ff6b35',g:'0 0 14px rgba(255,107,53,0.8)',    s:'INTERRUPTED - READY'}},
-    error:     {{d:'#ff3333',g:'none',                             s:'ERROR - RECOVERING'}},
-    noapi:     {{d:'#ff3333',g:'none',                             s:'USE CHROME OR EDGE'}},
-  }};
-  function theme(k) {{
-    const t=T[k]||T.boot;
-    orb.style.background=t.d; orb.style.boxShadow=t.g; status.textContent=t.s;
-  }}
+// ── TTS (runs in THIS iframe - same frame as ORB, so cancel() works) ──
+function speak(text) {{
+  if(!window.speechSynthesis || !text || !text.trim()) return;
+  window.speechSynthesis.cancel();
+  isSpeaking=true;
+  theme('speaking'); speakWave();
+  tbox.innerHTML='<span style="color:#c0183a;">&#9654; SPEAKING &mdash; TAP ORB TO STOP</span>';
 
-  function idle() {{
-    bars.forEach((b,i)=>{{b.style.height=(4+Math.sin(i*0.55)*4)+'px';b.style.background='rgba(0,212,255,0.15)';}});
-  }}
-  function startWave(stream) {{
-    stopWave();
-    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-    const an=audioCtx.createAnalyser(); an.fftSize=128;
-    audioCtx.createMediaStreamSource(stream).connect(an);
-    const data=new Uint8Array(an.frequencyBinCount);
-    function fr() {{
-      an.getByteFrequencyData(data);
-      bars.forEach((b,i)=>{{
-        const v=data[Math.floor(i*data.length/bars.length)];
-        b.style.height=Math.max(4,(v/255)*36)+'px';
-        b.style.background=`rgba(139,92,246,${{0.35+v/550}})`;
-      }});
-      rafId=requestAnimationFrame(fr);
-    }}
-    fr();
-  }}
-  function stopWave() {{
-    if(rafId){{cancelAnimationFrame(rafId);rafId=null;}}
-    if(audioCtx){{audioCtx.close().catch(()=>{{}});audioCtx=null;}}
-    idle();
-  }}
-  function speakWave() {{
-    let t=0;
-    if(rafId) cancelAnimationFrame(rafId);
-    function fr() {{
-      t+=0.12;
-      bars.forEach((b,i)=>{{
-        b.style.height=(5+Math.abs(Math.sin(t+i*0.38))*30)+'px';
-        b.style.background=`rgba(${{Math.round(192+Math.sin(t+i*0.5)*40)}},24,58,0.8)`;
-      }});
-      rafId=requestAnimationFrame(fr);
-    }}
-    fr();
-  }}
-  function chime() {{
-    try {{
-      const ctx=new (window.AudioContext||window.webkitAudioContext)();
-      [[440,0],[554,0.1],[659,0.2],[880,0.3]].forEach(([f,d])=>{{
-        const o=ctx.createOscillator(),g=ctx.createGain();
-        o.type='sine'; o.frequency.value=f;
-        o.connect(g); g.connect(ctx.destination);
-        g.gain.setValueAtTime(0,ctx.currentTime+d);
-        g.gain.linearRampToValueAtTime(0.18,ctx.currentTime+d+0.05);
-        g.gain.linearRampToValueAtTime(0,ctx.currentTime+d+0.3);
-        o.start(ctx.currentTime+d); o.stop(ctx.currentTime+d+0.35);
-      }});
-    }} catch(e) {{}}
-  }}
-  function getMic() {{
-    return navigator.mediaDevices.getUserMedia({{audio:{{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}}});
-  }}
-  function releaseMic() {{
-    if(micStream){{micStream.getTracks().forEach(t=>t.stop());micStream=null;}}
-    stopWave();
-  }}
+  const u=new SpeechSynthesisUtterance(text.trim());
+  u.rate=0.88; u.pitch=0.72; u.volume=1.0;
 
-  // ── WAKE WORD ─────────────────────────────────────────────
-  function startWake() {{
-    if(isWaking||isCommand) return;
-    if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)) {{
-      theme('noapi'); tbox.textContent='Speech API requires Chrome or Edge.'; return;
-    }}
-    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    wakeRec=new SR();
-    wakeRec.continuous=true; wakeRec.interimResults=true;
-    wakeRec.lang='en-US'; wakeRec.maxAlternatives=5;
-    wakeRec.onstart=()=>{{
-      isWaking=true; theme('wake');
-      tbox.innerHTML='Say <strong style="color:#00ffff;">HEY JARVIS</strong> to activate';
-      idle();
+  function go() {{
+    const vs=window.speechSynthesis.getVoices();
+    const pick=
+      vs.find(function(v){{return v.name==='Google UK English Male';}}) ||
+      vs.find(function(v){{return v.name.includes('Daniel');}}) ||
+      vs.find(function(v){{return v.name.includes('David');}}) ||
+      vs.find(function(v){{return v.lang==='en-GB';}}) ||
+      vs.find(function(v){{return v.lang.startsWith('en');}});
+    if(pick) u.voice=pick;
+    u.onend=u.onerror=function() {{
+      isSpeaking=false; idle(); theme('wake');
+      tbox.innerHTML='Say <strong style="color:#00ffff;">HEY JARVIS</strong> to continue...';
+      setTimeout(startWake,400);
     }};
-    wakeRec.onresult=(e)=>{{
-      if(isCommand) return;
-      for(let i=e.resultIndex;i<e.results.length;i++) {{
-        for(let j=0;j<e.results[i].length;j++) {{
-          const h=e.results[i][j].transcript.toLowerCase().trim();
-          if(h.includes('hey jarvis')||h.includes('ok jarvis')||
-             (h.includes('jarvis')&&h.length<22)) {{
-            try{{wakeRec.abort();}}catch(x){{}}
-            onWake(); return;
-          }}
+    window.speechSynthesis.speak(u);
+  }}
+
+  if(window.speechSynthesis.getVoices().length) go();
+  else window.speechSynthesis.onvoiceschanged=go;
+}}
+
+// ── ORB INTERRUPT - cancel in same frame ─────────────────────────
+window.orbInterrupt=function() {{
+  if(isSpeaking) {{
+    window.speechSynthesis.cancel();
+    isSpeaking=false;
+    stopWave(); theme('interrupt');
+    tbox.innerHTML='Interrupted. Say <strong style="color:#00ffff;">HEY JARVIS</strong>...';
+    setTimeout(startWake,400);
+  }}
+}};
+
+// ── AUTO-SPEAK: detect new TTS via localStorage seq comparison ───
+(function checkTTS() {{
+  const SKEY='jv_tts_seq';
+  const lastSeq=parseInt(localStorage.getItem(SKEY)||'0',10);
+  if(TTS_TEXT && TTS_SEQ>0 && TTS_SEQ!==lastSeq) {{
+    localStorage.setItem(SKEY, TTS_SEQ);
+    setTimeout(function(){{speak(TTS_TEXT);}}, 300);
+  }}
+}})();
+
+// ── MIC ─────────────────────────────────────────────────────────
+function getMic() {{
+  return navigator.mediaDevices.getUserMedia({{
+    audio:{{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}
+  }});
+}}
+function releaseMic() {{
+  if(micStream){{micStream.getTracks().forEach(function(t){{t.stop();}});micStream=null;}}
+  stopWave();
+}}
+
+// ── WAKE WORD LISTENER ──────────────────────────────────────────
+function startWake() {{
+  if(isWaking||isCommand||isSpeaking) return;
+  if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)) {{
+    theme('noapi'); tbox.textContent='Speech API requires Chrome or Edge.'; return;
+  }}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  wakeRec=new SR();
+  wakeRec.continuous=true; wakeRec.interimResults=true;
+  wakeRec.lang='en-US'; wakeRec.maxAlternatives=5;
+
+  wakeRec.onstart=function() {{
+    isWaking=true; theme('wake');
+    tbox.innerHTML='Say <strong style="color:#00ffff;">HEY JARVIS</strong> to activate';
+    idle();
+  }};
+  wakeRec.onresult=function(e) {{
+    if(isCommand||isSpeaking) return;
+    for(var i=e.resultIndex;i<e.results.length;i++) {{
+      for(var j=0;j<e.results[i].length;j++) {{
+        var h=e.results[i][j].transcript.toLowerCase().trim();
+        if(h.includes('hey jarvis')||h.includes('ok jarvis')||
+           (h.includes('jarvis')&&h.length<22)) {{
+          try{{wakeRec.abort();}}catch(x){{}}
+          onWake(); return;
         }}
       }}
-    }};
-    wakeRec.onerror=(e)=>{{
-      isWaking=false;
-      if(['no-speech','aborted','network'].includes(e.error)) setTimeout(startWake,500);
-      else{{theme('error');setTimeout(startWake,2500);}}
-    }};
-    wakeRec.onend=()=>{{isWaking=false;if(!isCommand)setTimeout(startWake,350);}};
-    try{{wakeRec.start();}}catch(e){{setTimeout(startWake,1000);}}
-  }}
-
-  function onWake() {{
-    isWaking=false; theme('detected');
-    tbox.textContent='Arc Reactor activated - speak your command...';
-    chime(); setTimeout(startCmd,550);
-  }}
-
-  // ── COMMAND ───────────────────────────────────────────────
-  function startCmd() {{
-    if(isCommand) return;
-    isCommand=true; finalText='';
-    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    cmdRec=new SR();
-    cmdRec.continuous=false; cmdRec.interimResults=true;
-    cmdRec.lang='en-US'; cmdRec.maxAlternatives=1;
-    cmdRec.onstart=()=>{{
-      theme('command'); tbox.textContent='Listening...';
-      getMic().then(s=>{{micStream=s;startWave(s);}}).catch(()=>{{}});
-      silTimer=setTimeout(()=>{{try{{cmdRec.stop();}}catch(x){{}}}},8000);
-    }};
-    cmdRec.onresult=(e)=>{{
-      clearTimeout(silTimer);
-      silTimer=setTimeout(()=>{{try{{cmdRec.stop();}}catch(x){{}}}},3000);
-      let interim=''; finalText='';
-      for(let i=e.resultIndex;i<e.results.length;i++) {{
-        if(e.results[i].isFinal) finalText+=e.results[i][0].transcript+' ';
-        else interim+=e.results[i][0].transcript;
-      }}
-      tbox.textContent=(finalText||interim).trim()||'...';
-    }};
-    cmdRec.onerror=(e)=>{{
-      clearTimeout(silTimer); isCommand=false; releaseMic();
-      if(e.error==='no-speech') {{
-        tbox.innerHTML='Nothing heard. Say <strong style="color:#00ffff;">HEY JARVIS</strong> again.';
-        theme('wake'); setTimeout(startWake,700);
-      }} else {{theme('error');setTimeout(startWake,1800);}}
-    }};
-    cmdRec.onend=()=>{{
-      clearTimeout(silTimer); releaseMic(); isCommand=false;
-      const cmd=finalText.trim();
-      if(cmd.length>1) {{
-        theme('thinking'); tbox.textContent=cmd; submit(cmd);
-      }} else {{
-        tbox.innerHTML='Nothing captured. Say <strong style="color:#00ffff;">HEY JARVIS</strong>.';
-        theme('wake'); setTimeout(startWake,700);
-      }}
-    }};
-    try{{cmdRec.start();}}catch(e){{isCommand=false;setTimeout(startWake,1000);}}
-  }}
-
-  // ── SUBMIT: FIX 1 - use location.href navigation to force Streamlit rerun
-  function submit(text) {{
-    const enc=encodeURIComponent(text), ts=Date.now().toString();
-    try {{
-      // First try replaceState (soft, no reload)
-      const u=new URL(window.parent.location.href);
-      u.searchParams.set('vc',enc); u.searchParams.set('vts',ts);
-      window.parent.history.replaceState({{}}, '', u.toString());
-      // Then navigate to force the rerun (Streamlit watches location changes)
-      setTimeout(()=>{{
-        try {{
-          const u2=new URL(window.parent.location.href);
-          u2.searchParams.set('vc',enc); u2.searchParams.set('vts',ts);
-          window.parent.location.href = u2.toString();
-        }} catch(e2) {{}}
-      }}, 100);
-    }} catch(e1) {{
-      // If parent access fails, try on own window
-      try {{
-        const u=new URL(window.location.href);
-        u.searchParams.set('vc',enc); u.searchParams.set('vts',ts);
-        window.location.href=u.toString();
-      }} catch(e2) {{}}
     }}
+  }};
+  wakeRec.onerror=function(e) {{
+    isWaking=false;
+    if(['no-speech','aborted','network'].indexOf(e.error)>=0) setTimeout(startWake,500);
+    else{{theme('error');setTimeout(startWake,2500);}}
+  }};
+  wakeRec.onend=function() {{
+    isWaking=false;
+    if(!isCommand&&!isSpeaking) setTimeout(startWake,350);
+  }};
+  try{{wakeRec.start();}}catch(e){{setTimeout(startWake,1000);}}
+}}
+
+function onWake() {{
+  isWaking=false; theme('detected');
+  tbox.textContent='Arc Reactor activated - speak your command...';
+  chime(); setTimeout(startCmd,550);
+}}
+
+// ── COMMAND LISTENER ────────────────────────────────────────────
+function startCmd() {{
+  if(isCommand) return;
+  isCommand=true; finalText='';
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  cmdRec=new SR();
+  cmdRec.continuous=false; cmdRec.interimResults=true;
+  cmdRec.lang='en-US'; cmdRec.maxAlternatives=1;
+
+  cmdRec.onstart=function() {{
+    theme('command'); tbox.textContent='Listening - speak now...';
+    getMic().then(function(s){{micStream=s;liveWave(s);}}).catch(function(){{}});
+    silTimer=setTimeout(function(){{try{{cmdRec.stop();}}catch(x){{}}}},8000);
+  }};
+  cmdRec.onresult=function(e) {{
+    clearTimeout(silTimer);
+    silTimer=setTimeout(function(){{try{{cmdRec.stop();}}catch(x){{}}}},3000);
+    var interim=''; finalText='';
+    for(var i=e.resultIndex;i<e.results.length;i++) {{
+      if(e.results[i].isFinal) finalText+=e.results[i][0].transcript+' ';
+      else interim+=e.results[i][0].transcript;
+    }}
+    tbox.textContent=(finalText||interim).trim()||'...';
+  }};
+  cmdRec.onerror=function(e) {{
+    clearTimeout(silTimer); isCommand=false; releaseMic();
+    if(e.error==='no-speech') {{
+      tbox.innerHTML='Nothing heard. Say <strong style="color:#00ffff;">HEY JARVIS</strong> again.';
+      theme('wake'); setTimeout(startWake,700);
+    }} else {{theme('error');setTimeout(startWake,1800);}}
+  }};
+  cmdRec.onend=function() {{
+    clearTimeout(silTimer); releaseMic(); isCommand=false;
+    var cmd=finalText.trim();
+    if(cmd.length>1) {{
+      theme('thinking'); tbox.textContent=cmd;
+      submitCmd(cmd);
+    }} else {{
+      tbox.innerHTML='Nothing captured. Say <strong style="color:#00ffff;">HEY JARVIS</strong>.';
+      theme('wake'); setTimeout(startWake,700);
+    }}
+  }};
+  try{{cmdRec.start();}}catch(e){{isCommand=false;setTimeout(startWake,1000);}}
+}}
+
+// ── SUBMIT: navigate parent URL -> Streamlit detects ?vc= and reruns ──
+function submitCmd(text) {{
+  var enc=encodeURIComponent(text), ts=Date.now().toString();
+  try {{
+    var u=new URL(window.parent.location.href);
+    u.searchParams.set('vc',enc); u.searchParams.set('vts',ts);
+    window.parent.location.href=u.toString();
+  }} catch(e1) {{
+    try {{
+      var u2=new URL(window.location.href);
+      u2.searchParams.set('vc',enc); u2.searchParams.set('vts',ts);
+      window.location.href=u2.toString();
+    }} catch(e2) {{}}
   }}
+}}
 
-  theme('boot'); idle();
-  setTimeout(startWake, 1000);
-}})();
+// ── BOOT ────────────────────────────────────────────────────────
+theme('boot'); idle();
+setTimeout(startWake,1000);
 </script>
-"""
-    components.html(voice_html, height=178)
+</body>
+</html>"""
 
-    # Chat history
+    components.html(voice_html, height=195, scrolling=False)
+
+    # ── CHAT HISTORY ──────────────────────────────────────────────
     TYPE_TO_ROLE = {"human": "user", "ai": "assistant"}
     for msg in st.session_state.chat_history.messages:
         role = TYPE_TO_ROLE.get(msg.type, msg.type)
         with st.chat_message(role):
             st.write(msg.content)
 
-    # Handle input
+    # ── HANDLE INPUT ──────────────────────────────────────────────
     user_query = st.chat_input("Interface with J.A.R.V.I.S...")
     if st.session_state.voice_input and not user_query:
         user_query = st.session_state.voice_input
@@ -811,13 +791,20 @@ body{{background:transparent;overflow:hidden;}}
         with st.chat_message("assistant"):
             st.write(output_text)
 
+        # Clean for TTS - remove ALL symbols that break speech
         clean_tts = (
             output_text
-            .replace('"'," ").replace("'"," ").replace("`"," ")
-            .replace("\\"," ").replace("\n"," ")
-            .replace("#"," ").replace("*"," ")
-            .strip()[:900]
+            .replace('"', " ").replace("'", " ").replace("`", " ")
+            .replace("\\", " ").replace("\n", ". ").replace("\r", " ")
+            .replace("#", " ").replace("*", " ").replace("_", " ")
+            .replace("|", ", ").replace("[", "").replace("]", "")
+            .replace("(", "").replace(")", "").replace("{", "").replace("}", "")
+            .strip()
         )
+        # Collapse multiple spaces
+        import re
+        clean_tts = re.sub(r'\s+', ' ', clean_tts)[:900]
+
         st.session_state.tts_text = clean_tts
         st.session_state.tts_seq += 1
 
@@ -826,21 +813,23 @@ body{{background:transparent;overflow:hidden;}}
 
 # ================================================================
 # TAB 2: MUSIC STATION
-# FIX 3: Switched from Deezer JSONP (CSP-blocked) to iTunes Search API
-#         - Full CORS support, no auth, works on all hosting
-#         - Supports Indian regional music: Telugu, Hindi, Tamil, Kannada
-#         - 30-second previews available globally
+# Full songs via YouTube IFrame API (no 30s limit, all languages)
+# User searches -> results appear -> click to play full song in player
 # ================================================================
 with tab_music:
-    music_html = """
+    music_html = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:transparent;font-family:'Rajdhani',sans-serif;color:#a8d4e8;}
+html,body{background:transparent;font-family:'Rajdhani',sans-serif;color:#a8d4e8;height:100%;}
+
 #mp{
   background:linear-gradient(160deg,rgba(4,15,30,0.98),rgba(6,0,30,0.99));
   border:1px solid rgba(0,212,255,0.2); border-radius:8px;
-  padding:20px; position:relative; overflow:hidden;
+  padding:18px 20px; position:relative; overflow:hidden;
 }
 #mp::before{
   content:'';position:absolute;top:0;left:-100%;width:50%;height:1px;
@@ -848,8 +837,36 @@ body{background:transparent;font-family:'Rajdhani',sans-serif;color:#a8d4e8;}
   animation:scan2 5s linear infinite;
 }
 @keyframes scan2{to{left:200%;}}
-h2{font-family:'Orbitron',monospace;font-size:0.9rem;color:rgba(0,212,255,0.7);letter-spacing:0.3em;margin-bottom:16px;text-transform:uppercase;}
-.srow{display:flex;gap:8px;margin-bottom:20px;}
+.corn{position:absolute;width:10px;height:10px;border-color:rgba(0,212,255,0.4);border-style:solid;}
+.tl{top:0;left:0;border-width:1px 0 0 1px;}.tr{top:0;right:0;border-width:1px 1px 0 0;}
+.bl{bottom:0;left:0;border-width:0 0 1px 1px;}.br{bottom:0;right:0;border-width:0 1px 1px 0;}
+
+h2{font-family:'Orbitron',monospace;font-size:0.85rem;color:rgba(0,212,255,0.7);letter-spacing:0.3em;margin-bottom:4px;text-transform:uppercase;}
+.api-note{font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:rgba(0,212,255,0.35);margin-bottom:14px;}
+
+/* PLAYER */
+#player-wrap{
+  background:rgba(0,0,0,0.4);border:1px solid rgba(0,212,255,0.15);
+  border-radius:6px;margin-bottom:14px;overflow:hidden;
+  display:none; position:relative;
+}
+#yt-player{width:100%;height:220px;display:block;}
+#np-bar{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:rgba(0,212,255,0.04);border-top:1px solid rgba(0,212,255,0.1);
+}
+#np-title{
+  font-family:'Share Tech Mono',monospace;font-size:0.78rem;
+  color:#00d4ff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#np-badge{
+  font-family:'Orbitron',monospace;font-size:0.5rem;letter-spacing:0.15em;
+  color:rgba(0,212,255,0.5);background:rgba(0,212,255,0.08);
+  border:1px solid rgba(0,212,255,0.2);border-radius:2px;padding:2px 6px;white-space:nowrap;
+}
+
+/* SEARCH */
+.srow{display:flex;gap:8px;margin-bottom:14px;}
 #sq{
   flex:1;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.25);
   border-radius:4px;color:#00d4ff;font-family:'Share Tech Mono',monospace;
@@ -860,277 +877,252 @@ h2{font-family:'Orbitron',monospace;font-size:0.9rem;color:rgba(0,212,255,0.7);l
 #sbtn{
   background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);
   color:#00d4ff;font-family:'Orbitron',monospace;font-size:0.6rem;
-  letter-spacing:0.1em;padding:8px 16px;border-radius:4px;cursor:pointer;
-  transition:all 0.2s;white-space:nowrap;
+  letter-spacing:0.1em;padding:8px 14px;border-radius:4px;cursor:pointer;transition:all 0.2s;
 }
 #sbtn:hover{background:rgba(0,212,255,0.15);box-shadow:0 0 10px rgba(0,212,255,0.2);}
-#now-playing{
-  display:none;background:rgba(0,212,255,0.04);
-  border:1px solid rgba(0,212,255,0.18);border-radius:6px;padding:14px;margin-bottom:16px;
-}
-#np-inner{display:flex;align-items:center;gap:14px;}
-#np-art{
-  width:60px;height:60px;border-radius:4px;object-fit:cover;flex-shrink:0;
-  border:1px solid rgba(0,212,255,0.2);box-shadow:0 0 16px rgba(0,212,255,0.15);
-}
-#np-info{flex:1;min-width:0;}
-#np-title{font-family:'Orbitron',monospace;font-size:0.75rem;color:#00d4ff;letter-spacing:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-#np-artist{font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:rgba(0,212,255,0.55);margin-top:2px;}
-#np-album{font-size:0.68rem;color:rgba(0,212,255,0.35);margin-top:2px;font-style:italic;}
-#prog-wrap{margin-top:10px;}
-#prog-bar{width:100%;height:3px;background:rgba(0,212,255,0.1);border-radius:2px;cursor:pointer;position:relative;}
-#prog-fill{height:100%;background:linear-gradient(90deg,#00aadd,#00d4ff);border-radius:2px;width:0%;transition:width 0.5s linear;}
-#prog-dot{position:absolute;top:-3px;width:9px;height:9px;border-radius:50%;background:#00d4ff;box-shadow:0 0 8px #00d4ff;left:0%;transform:translateX(-50%);}
-#times{display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:rgba(0,212,255,0.4);margin-top:4px;}
-#ctrl{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:12px;}
-.ctrl-btn{
-  background:transparent;border:1px solid rgba(0,212,255,0.2);
-  color:rgba(0,212,255,0.7);border-radius:50%;width:36px;height:36px;
-  display:flex;align-items:center;justify-content:center;cursor:pointer;
-  transition:all 0.2s;font-size:0.9rem;
-}
-.ctrl-btn:hover{background:rgba(0,212,255,0.1);border-color:#00d4ff;color:#00d4ff;box-shadow:0 0 10px rgba(0,212,255,0.2);}
-#playbtn{width:44px;height:44px;font-size:1rem;border-width:2px;}
-#playbtn.playing{background:rgba(0,212,255,0.12);border-color:#00d4ff;color:#00d4ff;box-shadow:0 0 15px rgba(0,212,255,0.3);}
-#vol-row{display:flex;align-items:center;gap:8px;margin-top:10px;}
-#vol-label{font-family:'Orbitron',monospace;font-size:0.52rem;color:rgba(0,212,255,0.4);letter-spacing:0.15em;}
-#vol{-webkit-appearance:none;appearance:none;flex:1;height:3px;background:rgba(0,212,255,0.15);border-radius:2px;cursor:pointer;}
-#vol::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#00d4ff;box-shadow:0 0 6px #00d4ff;}
-#tracklist{display:none;}
-.track{
-  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:4px;
-  cursor:pointer;transition:background 0.15s;border-bottom:1px solid rgba(0,212,255,0.06);
-}
-.track:hover{background:rgba(0,212,255,0.07);}
-.track.active{background:rgba(0,212,255,0.1);}
-.track-num{font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:rgba(0,212,255,0.3);width:20px;flex-shrink:0;}
-.t-art{width:36px;height:36px;border-radius:3px;object-fit:cover;flex-shrink:0;}
-.t-info{flex:1;min-width:0;}
-.t-title{font-family:'Rajdhani',sans-serif;font-size:0.85rem;color:rgba(0,212,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.t-artist{font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:rgba(0,212,255,0.45);}
-.t-dur{font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:rgba(0,212,255,0.35);flex-shrink:0;}
-#wave2{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:30px;margin:10px 0 0;}
-.w2b{width:3px;border-radius:2px 2px 0 0;background:rgba(0,212,255,0.15);transition:height 0.1s;}
-#status-msg{font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:rgba(0,212,255,0.5);text-align:center;padding:8px 0;}
-#presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;}
+
+/* PRESETS */
+#presets{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;}
 .preset{
   background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.18);
   color:rgba(0,212,255,0.65);font-family:'Share Tech Mono',monospace;
-  font-size:0.68rem;padding:4px 10px;border-radius:12px;cursor:pointer;transition:all 0.15s;
+  font-size:0.67rem;padding:4px 9px;border-radius:12px;cursor:pointer;transition:all 0.15s;
 }
 .preset:hover{background:rgba(0,212,255,0.12);border-color:rgba(0,212,255,0.4);color:#00d4ff;}
-#api-note{font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:rgba(0,212,255,0.3);text-align:right;margin-bottom:6px;}
+
+/* RESULTS */
+#status-msg{font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:rgba(0,212,255,0.5);text-align:center;padding:8px 0;}
+#results{display:none;}
+.ritem{
+  display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:4px;
+  cursor:pointer;transition:background 0.15s;border-bottom:1px solid rgba(0,212,255,0.06);
+}
+.ritem:hover{background:rgba(0,212,255,0.08);}
+.ritem.active{background:rgba(0,212,255,0.12);border-left:2px solid #00d4ff;}
+.rthumb{width:48px;height:36px;border-radius:3px;object-fit:cover;flex-shrink:0;background:rgba(0,0,0,0.4);}
+.rinfo{flex:1;min-width:0;}
+.rtitle{font-family:'Rajdhani',sans-serif;font-size:0.85rem;color:rgba(0,212,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rchan{font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:rgba(0,212,255,0.45);}
+.rdur{font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:rgba(0,212,255,0.35);flex-shrink:0;}
+.play-icon{width:28px;height:28px;border:1px solid rgba(0,212,255,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:rgba(0,212,255,0.6);font-size:0.7rem;transition:all 0.15s;}
+.ritem:hover .play-icon{background:rgba(0,212,255,0.1);color:#00d4ff;border-color:#00d4ff;}
 </style>
-
+</head>
+<body>
 <div id="mp">
+  <div class="corn tl"></div><div class="corn tr"></div>
+  <div class="corn bl"></div><div class="corn br"></div>
+
   <h2>&#127925; JARVIS MUSIC STATION</h2>
-  <div id="api-note">Powered by iTunes Search API &mdash; Global + Indian catalog</div>
+  <div class="api-note">Full songs via YouTube &mdash; All languages including Telugu, Hindi, Tamil, Kannada, Global</div>
 
+  <!-- YouTube Player -->
+  <div id="player-wrap">
+    <div id="yt-player"></div>
+    <div id="np-bar">
+      <span id="np-title">No track selected</span>
+      <span id="np-badge">&#9654; PLAYING</span>
+    </div>
+  </div>
+
+  <!-- Genre Presets -->
   <div id="presets">
-    <span class="preset" onclick="searchMusic('top hits 2024','all')">&#128293; Top Hits</span>
-    <span class="preset" onclick="searchMusic('Arijit Singh','musicArtist')">&#127988; Arijit Singh</span>
-    <span class="preset" onclick="searchMusic('Telugu songs Sid Sriram','all')">&#127873; Telugu</span>
-    <span class="preset" onclick="searchMusic('Tamil Anirudh Ravichander','all')">&#9733; Tamil</span>
-    <span class="preset" onclick="searchMusic('Kannada songs','all')">&#127774; Kannada</span>
-    <span class="preset" onclick="searchMusic('electronic ambient','all')">&#9889; Electronic</span>
-    <span class="preset" onclick="searchMusic('jazz instrumental','all')">&#127928; Jazz</span>
-    <span class="preset" onclick="searchMusic('lo-fi hip hop','all')">&#128247; Lo-Fi</span>
-    <span class="preset" onclick="searchMusic('classical piano','all')">&#127929; Classical</span>
-    <span class="preset" onclick="searchMusic('A.R. Rahman','musicArtist')">&#127775; A.R. Rahman</span>
-    <span class="preset" onclick="searchMusic('SP Balasubrahmanyam','musicArtist')">&#9654; SPB</span>
-    <span class="preset" onclick="searchMusic('The Weeknd','musicArtist')">&#11088; The Weeknd</span>
+    <span class="preset" onclick="doSearch('top hits songs 2024')">&#128293; Top Hits</span>
+    <span class="preset" onclick="doSearch('Arijit Singh best songs')">&#127988; Arijit Singh</span>
+    <span class="preset" onclick="doSearch('Sid Sriram Telugu songs')">&#127873; Telugu</span>
+    <span class="preset" onclick="doSearch('Anirudh Ravichander Tamil hits')">&#9733; Tamil</span>
+    <span class="preset" onclick="doSearch('Kannada songs hits 2024')">&#127774; Kannada</span>
+    <span class="preset" onclick="doSearch('AR Rahman best songs')">&#127775; AR Rahman</span>
+    <span class="preset" onclick="doSearch('SPB SP Balasubrahmanyam songs')">&#9654; SPB Hits</span>
+    <span class="preset" onclick="doSearch('lo-fi hip hop music')">&#128247; Lo-Fi</span>
+    <span class="preset" onclick="doSearch('jazz instrumental music')">&#127928; Jazz</span>
+    <span class="preset" onclick="doSearch('The Weeknd best songs')">&#11088; The Weeknd</span>
+    <span class="preset" onclick="doSearch('classical piano music')">&#127929; Classical</span>
+    <span class="preset" onclick="doSearch('electronic music 2024')">&#9889; Electronic</span>
   </div>
 
+  <!-- Search -->
   <div class="srow">
-    <input id="sq" type="text" placeholder="Search artist, song, album, language..." />
-    <button id="sbtn" onclick="searchMusic()">&#128269; SEARCH</button>
+    <input id="sq" type="text" placeholder="Search any song, artist, album, language..." />
+    <button id="sbtn" onclick="doSearch()">&#128269; SEARCH</button>
   </div>
 
-  <div id="now-playing">
-    <div id="np-inner">
-      <img id="np-art" src="" alt="Art" />
-      <div id="np-info">
-        <div id="np-title">-</div>
-        <div id="np-artist">-</div>
-        <div id="np-album">-</div>
-      </div>
-    </div>
-    <div id="prog-wrap">
-      <div id="prog-bar" onclick="seek(event)">
-        <div id="prog-fill"></div>
-        <div id="prog-dot"></div>
-      </div>
-      <div id="times"><span id="t-cur">0:00</span><span id="t-dur">0:30</span></div>
-    </div>
-    <div id="vol-row">
-      <span id="vol-label">VOL</span>
-      <input id="vol" type="range" min="0" max="1" step="0.02" value="0.8" oninput="setVol(this.value)" />
-    </div>
-    <div id="ctrl">
-      <button class="ctrl-btn" onclick="prevTrack()" title="Previous">&#9664;&#9664;</button>
-      <button class="ctrl-btn" id="playbtn" onclick="togglePlay()" title="Play/Pause">&#9654;</button>
-      <button class="ctrl-btn" onclick="nextTrack()" title="Next">&#9654;&#9654;</button>
-    </div>
-    <div id="wave2">
-      <div class="w2b" style="height:4px"></div><div class="w2b" style="height:6px"></div>
-      <div class="w2b" style="height:4px"></div><div class="w2b" style="height:8px"></div>
-      <div class="w2b" style="height:5px"></div><div class="w2b" style="height:4px"></div>
-      <div class="w2b" style="height:10px"></div><div class="w2b" style="height:6px"></div>
-      <div class="w2b" style="height:4px"></div><div class="w2b" style="height:7px"></div>
-      <div class="w2b" style="height:12px"></div><div class="w2b" style="height:5px"></div>
-      <div class="w2b" style="height:4px"></div><div class="w2b" style="height:9px"></div>
-      <div class="w2b" style="height:6px"></div><div class="w2b" style="height:4px"></div>
-      <div class="w2b" style="height:8px"></div><div class="w2b" style="height:5px"></div>
-      <div class="w2b" style="height:4px"></div><div class="w2b" style="height:6px"></div>
-    </div>
-  </div>
-
-  <div id="status-msg">Search for music or pick a genre above</div>
-  <div id="tracklist"></div>
+  <div id="status-msg">Search for music or tap a genre above to start</div>
+  <div id="results"></div>
 </div>
 
+<!-- YouTube IFrame API -->
+<script src="https://www.youtube.com/iframe_api"></script>
 <script>
 (function() {
-  // FIX 3: iTunes Search API - full CORS support, no CSP issues, global+Indian catalog
-  let tracks=[], currentIdx=-1, audio=null, progTimer=null, waveTimer=null;
-  const w2bars=Array.from(document.querySelectorAll('.w2b'));
-  const sq=document.getElementById('sq');
-  const statusEl=document.getElementById('status-msg');
-  const np=document.getElementById('now-playing');
-  const tlist=document.getElementById('tracklist');
-  const playbtn=document.getElementById('playbtn');
+  var ytPlayer = null;
+  var ytReady  = false;
+  var pendingId = null;
+  var currentIdx = -1;
+  var videoList  = [];
 
-  sq.addEventListener('keydown', e=>{ if(e.key==='Enter') searchMusic(); });
+  var sq       = document.getElementById('sq');
+  var statusEl = document.getElementById('status-msg');
+  var resultsEl= document.getElementById('results');
+  var playerWrap=document.getElementById('player-wrap');
+  var npTitle  = document.getElementById('np-title');
 
-  window.searchMusic = function(q, entity) {
-    const query = q || sq.value.trim();
-    if (!query) return;
-    sq.value = query;
-    statusEl.textContent = 'Scanning iTunes catalog...';
-    tlist.innerHTML = ''; tlist.style.display='none'; np.style.display='none';
+  sq.addEventListener('keydown', function(e){ if(e.key==='Enter') doSearch(); });
 
-    // iTunes Search API: CORS-open, no auth needed, global catalog
-    const ent   = entity || 'song';
-    const url   = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=${ent}&limit=25&explicit=No`;
-
-    fetch(url)
-      .then(r => r.json())
-      .then(data => {
-        // Filter to only songs with preview URLs
-        let results = (data.results || []).filter(t => t.kind === 'song' && t.previewUrl);
-        if (results.length === 0) {
-          // Retry with broader entity if artist search returned no songs
-          if (entity === 'musicArtist') {
-            searchMusic(query, 'song'); return;
+  // YouTube IFrame API ready callback
+  window.onYouTubeIframeAPIReady = function() {
+    ytReady = true;
+    ytPlayer = new YT.Player('yt-player', {
+      height: '220',
+      width:  '100%',
+      playerVars: {
+        autoplay: 0, controls: 1, rel: 0,
+        modestbranding: 1, fs: 1, iv_load_policy: 3
+      },
+      events: {
+        onReady: function() {
+          if(pendingId) { playVideo(pendingId, pendingId); pendingId=null; }
+        },
+        onStateChange: function(e) {
+          if(e.data === YT.PlayerState.ENDED) {
+            // Auto next
+            if(currentIdx+1 < videoList.length) {
+              currentIdx++;
+              var v=videoList[currentIdx];
+              playVideo(v.id, v.title);
+              highlightActive();
+            }
           }
-          statusEl.textContent = 'No preview tracks found. Try another search.';
-          return;
         }
-        tracks = results.slice(0, 20);
-        renderTracks();
-        statusEl.textContent = '';
-      })
-      .catch(err => {
-        console.error(err);
-        statusEl.textContent = 'Search failed. Check your connection.';
-      });
+      }
+    });
   };
 
-  function renderTracks() {
-    tlist.innerHTML = ''; tlist.style.display='block';
-    tracks.forEach((t,i) => {
-      const div=document.createElement('div');
-      div.className='track'+(i===currentIdx?' active':'');
-      const art = t.artworkUrl60 || '';
-      const dur = Math.round((t.trackTimeMillis||30000)/1000);
-      div.innerHTML=`
-        <span class="track-num">${i+1}</span>
-        <img class="t-art" src="${art}" loading="lazy" onerror="this.style.display='none'" />
-        <div class="t-info">
-          <div class="t-title">${t.trackName||'Unknown'}</div>
-          <div class="t-artist">${t.artistName||''}</div>
-        </div>
-        <span class="t-dur">${fmtTime(Math.min(dur,30))}</span>`;
-      div.onclick=()=>playTrack(i);
-      tlist.appendChild(div);
+  function playVideo(videoId, title) {
+    playerWrap.style.display = 'block';
+    npTitle.textContent = title || 'Playing...';
+    if(ytReady && ytPlayer && ytPlayer.loadVideoById) {
+      ytPlayer.loadVideoById(videoId);
+    } else {
+      pendingId = videoId;
+    }
+  }
+
+  function highlightActive() {
+    Array.from(resultsEl.querySelectorAll('.ritem')).forEach(function(el, i) {
+      el.classList.toggle('active', i === currentIdx);
     });
   }
 
-  function playTrack(idx) {
-    if(idx<0||idx>=tracks.length) return;
-    currentIdx=idx;
-    const t=tracks[idx];
-    if(audio){audio.pause();clearInterval(progTimer);}
-    audio=new Audio(t.previewUrl);
-    audio.volume=parseFloat(document.getElementById('vol').value);
-    audio.crossOrigin='anonymous';
-    audio.oncanplay=()=>{
-      audio.play().catch(()=>{});
-      playbtn.textContent='⏸'; playbtn.classList.add('playing');
-      startProg(); startWave2();
-    };
-    audio.onended=()=>{
-      playbtn.textContent='▶'; playbtn.classList.remove('playing');
-      stopWave2(); nextTrack();
-    };
-    audio.onerror=()=>{
-      statusEl.textContent='Preview unavailable. Skipping...';
-      setTimeout(()=>nextTrack(),1200);
-    };
-    np.style.display='block';
-    const bigArt=(t.artworkUrl100||t.artworkUrl60||'').replace('100x100','300x300');
-    document.getElementById('np-art').src=bigArt;
-    document.getElementById('np-title').textContent=t.trackName||'Unknown';
-    document.getElementById('np-artist').textContent=t.artistName||'';
-    document.getElementById('np-album').textContent=t.collectionName||'';
-    document.getElementById('t-dur').textContent='0:30';
-    document.querySelectorAll('.track').forEach((el,i)=>el.classList.toggle('active',i===idx));
-  }
+  // YouTube Data API v3 - free, CORS-open for search
+  window.doSearch = function(q) {
+    var query = q || sq.value.trim();
+    if(!query) return;
+    sq.value = query;
+    statusEl.textContent = 'Scanning YouTube catalog...';
+    resultsEl.innerHTML = ''; resultsEl.style.display='none';
 
-  window.togglePlay=function(){
-    if(!audio) return;
-    if(audio.paused){audio.play();playbtn.textContent='⏸';playbtn.classList.add('playing');startWave2();}
-    else{audio.pause();playbtn.textContent='▶';playbtn.classList.remove('playing');stopWave2();}
-  };
-  window.nextTrack=function(){if(tracks.length)playTrack((currentIdx+1)%tracks.length);};
-  window.prevTrack=function(){if(tracks.length)playTrack((currentIdx-1+tracks.length)%tracks.length);};
-  window.setVol=function(v){if(audio)audio.volume=parseFloat(v);};
-  window.seek=function(e){
-    if(!audio) return;
-    const rect=e.currentTarget.getBoundingClientRect();
-    audio.currentTime=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*audio.duration;
+    // Use YouTube oEmbed + noembed as a free search proxy
+    // Primary: invidious public API (open source YouTube frontend, no key needed)
+    var apis = [
+      'https://invidious.io.lol/api/v1/search?q='+encodeURIComponent(query)+'&type=video&page=1',
+      'https://yt.dragongoaway.net/api/v1/search?q='+encodeURIComponent(query)+'&type=video&page=1',
+      'https://invidious.privacydev.net/api/v1/search?q='+encodeURIComponent(query)+'&type=video&page=1'
+    ];
+
+    tryApi(apis, 0, query);
   };
 
-  function startProg(){
-    clearInterval(progTimer);
-    progTimer=setInterval(()=>{
-      if(!audio||audio.paused) return;
-      const pct=(audio.currentTime/(audio.duration||1))*100;
-      document.getElementById('prog-fill').style.width=pct+'%';
-      document.getElementById('prog-dot').style.left=pct+'%';
-      document.getElementById('t-cur').textContent=fmtTime(audio.currentTime);
-    },500);
-  }
-  function startWave2(){
-    clearInterval(waveTimer); let t=0;
-    waveTimer=setInterval(()=>{
-      t+=0.2;
-      w2bars.forEach((b,i)=>{
-        const h=3+Math.abs(Math.sin(t+i*0.45))*24;
-        b.style.height=h+'px';
-        b.style.background=`rgba(0,${Math.round(180+Math.sin(t+i)*50)},255,0.6)`;
-      });
-    },80);
-  }
-  function stopWave2(){
-    clearInterval(waveTimer);
-    w2bars.forEach((b,i)=>{b.style.height=(4+Math.sin(i*0.6)*3)+'px';b.style.background='rgba(0,212,255,0.15)';});
-  }
-  function fmtTime(s){const m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+String(sec).padStart(2,'0');}
+  function tryApi(apis, idx, query) {
+    if(idx >= apis.length) {
+      // All failed - show fallback search link
+      statusEl.textContent = '';
+      resultsEl.style.display = 'block';
+      resultsEl.innerHTML =
+        '<div style="text-align:center;padding:20px;font-family:Share Tech Mono,monospace;font-size:0.75rem;color:rgba(0,212,255,0.5);">' +
+        'Direct YouTube search: <br><br>' +
+        '<a href="https://www.youtube.com/results?search_query='+encodeURIComponent(query)+'" ' +
+        'target="_blank" style="color:#00d4ff;text-decoration:none;font-size:0.85rem;">&#128269; Open YouTube: '+query+'</a>' +
+        '<br><br><span style="font-size:0.65rem;color:rgba(0,212,255,0.35);">Tip: Copy the video ID and paste below to play directly</span>' +
+        '<br><br><div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">' +
+        '<input id="vidid" placeholder="Paste YouTube video ID..." style="background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:#00d4ff;font-family:Share Tech Mono,monospace;font-size:0.8rem;padding:6px 10px;outline:none;width:200px;"/>' +
+        '<button onclick="playDirectId()" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);color:#00d4ff;font-family:Orbitron,monospace;font-size:0.55rem;letter-spacing:0.1em;padding:6px 12px;border-radius:4px;cursor:pointer;">PLAY</button>' +
+        '</div></div>';
+      return;
+    }
 
-  // Auto-load
-  searchMusic('Arijit Singh top songs', 'song');
+    fetch(apis[idx])
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var videos = Array.isArray(data) ? data : (data.videos || data.items || []);
+        var filtered = videos.filter(function(v){
+          return (v.type==='video'||v.videoId||v.id) && (v.title||v.snippet);
+        }).slice(0,15);
+
+        if(filtered.length === 0) { tryApi(apis, idx+1, query); return; }
+
+        videoList = filtered.map(function(v){
+          var vid = v.videoId || (v.id && v.id.videoId) || v.id || '';
+          var title = v.title || (v.snippet && v.snippet.title) || 'Unknown';
+          var chan = v.author || v.authorId || (v.snippet&&v.snippet.channelTitle) || '';
+          var dur = v.lengthSeconds ? fmtSec(parseInt(v.lengthSeconds)) : '';
+          var thumb = v.videoThumbnails
+            ? (v.videoThumbnails[2]||v.videoThumbnails[0]||{}).url||''
+            : (v.snippet&&v.snippet.thumbnails&&(v.snippet.thumbnails.medium||v.snippet.thumbnails.default||{}).url)||
+              'https://img.youtube.com/vi/'+vid+'/mqdefault.jpg';
+          return {id:vid, title:title, channel:chan, dur:dur, thumb:thumb};
+        });
+
+        renderResults();
+        statusEl.textContent = '';
+      })
+      .catch(function(){ tryApi(apis, idx+1, query); });
+  }
+
+  function renderResults() {
+    resultsEl.innerHTML = ''; resultsEl.style.display='block';
+    videoList.forEach(function(v, i) {
+      var div=document.createElement('div');
+      div.className='ritem'+(i===currentIdx?' active':'');
+      div.innerHTML=
+        '<img class="rthumb" src="'+v.thumb+'" onerror="this.src=\'https://img.youtube.com/vi/'+v.id+'/mqdefault.jpg\'" loading="lazy"/>'+
+        '<div class="rinfo">'+
+          '<div class="rtitle">'+escHtml(v.title)+'</div>'+
+          '<div class="rchan">'+escHtml(v.channel)+'</div>'+
+        '</div>'+
+        (v.dur?'<span class="rdur">'+v.dur+'</span>':'')+
+        '<div class="play-icon">&#9654;</div>';
+      div.onclick=(function(idx){ return function(){
+        currentIdx=idx; playVideo(videoList[idx].id, videoList[idx].title); highlightActive();
+      };})(i);
+      resultsEl.appendChild(div);
+    });
+  }
+
+  window.playDirectId=function(){
+    var id=(document.getElementById('vidid')||{}).value||'';
+    id=id.trim();
+    if(!id) return;
+    // Extract ID from full URL if pasted
+    var m=id.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+    if(m) id=m[1];
+    if(id.length===11) playVideo(id, 'Custom video');
+  };
+
+  function fmtSec(s){
+    var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+    if(h>0) return h+':'+pad(m)+':'+pad(sec);
+    return m+':'+pad(sec);
+  }
+  function pad(n){return n<10?'0'+n:String(n);}
+  function escHtml(t){
+    return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Auto-load default
+  window.doSearch('Arijit Singh best Bollywood songs');
 })();
 </script>
-"""
-    components.html(music_html, height=820)
+</body>
+</html>"""
+    components.html(music_html, height=860, scrolling=True)
